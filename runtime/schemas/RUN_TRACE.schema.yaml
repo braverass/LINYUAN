@@ -1,0 +1,13 @@
+version: "0.5"
+
+trace:
+  fields:
+    run_id: string
+    retrieval: array
+    provenance: array
+    validator_result: array
+    hashes: object
+
+rules:
+  runtime_only: true
+  generator_visible: false
