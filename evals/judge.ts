@@ -94,6 +94,7 @@ export async function judgeCase(
     response_format: 'json',
     latency_ms: response.latencyMs || Date.now() - started,
     request_id: response.requestId ?? null,
+    response_id: response.responseId ?? null,
     usage: response.usage ? structuredClone(response.usage) : null,
     settings: {
       temperature: setting(request.temperature, client.defaults.temperature),
