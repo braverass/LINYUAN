@@ -36,7 +36,7 @@ The verifier checks:
 - Every tracked artifact has the exact declared byte count and SHA-256.
 - `OUTPUT`, `NEED_CONTEXT`, `CONFLICT`, and `ERROR` have the correct required and forbidden artifact sets.
 - `input.json` hashes and execution options agree with `manifest.input`.
-- `calls.json` exactly matches `manifest.calls`, and recorded calls agree with their stage model descriptors.
+- `calls.json` exactly matches `manifest.calls`, recorded calls agree with their stage model descriptors, and provider identity fields are type-checked.
 - Successful/non-error `trace.json` agrees with the runtime run ID and retrieval evidence in the manifest.
 - `result.json.status` agrees with the manifest status.
 - For `OUTPUT`, the runtime output reconstructed from `output.md` agrees with `result.output_hash`.

@@ -425,6 +425,31 @@ export async function verifyLiveFictionBundle(
         );
         continue;
       }
+      if (
+        !hasOwn(call, 'request_id') ||
+        (call.request_id !== null &&
+          (typeof call.request_id !== 'string' || call.request_id.length === 0))
+      ) {
+        addIssue(
+          errors,
+          'CALL_REQUEST_ID_INVALID',
+          'Call request_id must be null or a non-empty string',
+          'manifest.json'
+        );
+      }
+      if (
+        hasOwn(call, 'response_id') &&
+        call.response_id !== null &&
+        (typeof call.response_id !== 'string' || call.response_id.length === 0)
+      ) {
+        addIssue(
+          errors,
+          'CALL_RESPONSE_ID_INVALID',
+          'Call response_id must be null or a non-empty string when present',
+          'manifest.json'
+        );
+      }
+
       const descriptor = asRecord(stageModels[call.stage]);
       if (!descriptor) {
         addIssue(
