@@ -115,65 +115,6 @@ function expectedArtifacts(status: string): string[] | null {
   if (status === 'NEED_CONTEXT' || status === 'CONFLICT') {
     return ['input.json', 'trace.json', 'calls.json', 'result.json'];
   }
-  if (manifestCalls && status && status !== 'ERROR') {
-    const callStages = manifestCalls
-      .map((rawCall) => asRecord(rawCall)?.stage)
-      .filter((stage): stage is string => typeof stage === 'string');
-
-    if (callStages.length === 0) {
-      addIssue(
-        errors,
-        'CALLS_EMPTY',
-        'Non-error live evidence must contain model call records',
-        'manifest.json'
-      );
-    }
-
-    const compilerIndex = callStages.indexOf('compiler');
-    if (compilerIndex < 0) {
-      addIssue(
-        errors,
-        'CALL_SEQUENCE_INVALID',
-        'Non-error live evidence must contain a compiler call',
-        'manifest.json'
-      );
-    }
-
-    if (status === 'OUTPUT') {
-      const generatorIndex = callStages.indexOf('generator');
-      const validatorIndex = callStages.indexOf('validator');
-      if (
-        compilerIndex < 0 ||
-        generatorIndex < 0 ||
-        validatorIndex < 0 ||
-        !(compilerIndex < generatorIndex && generatorIndex < validatorIndex)
-      ) {
-        addIssue(
-          errors,
-          'CALL_SEQUENCE_INVALID',
-          'OUTPUT evidence must contain compiler -> generator -> validator calls in order',
-          'manifest.json'
-        );
-      }
-    }
-
-    if (
-      manifestInput &&
-      manifestInput.semantic_ids === null &&
-      compilerIndex >= 0
-    ) {
-      const plannerIndex = callStages.indexOf('retrieval_planner');
-      if (plannerIndex < 0 || plannerIndex > compilerIndex) {
-        addIssue(
-          errors,
-          'CALL_SEQUENCE_INVALID',
-          'Planner-driven live evidence must contain retrieval_planner before compiler',
-          'manifest.json'
-        );
-      }
-    }
-  }
-
   if (status === 'ERROR') {
     return ['input.json', 'calls.json', 'failure.json'];
   }
@@ -684,6 +625,66 @@ export async function verifyLiveFictionBundle(
           errors,
           'CALL_STAGE_MODEL_MISMATCH',
           'Call provider/model differs from the stage model descriptor',
+          'manifest.json'
+        );
+      }
+    }
+  }
+
+
+  if (manifestCalls && status && status !== 'ERROR') {
+    const callStages = manifestCalls
+      .map((rawCall) => asRecord(rawCall)?.stage)
+      .filter((stage): stage is string => typeof stage === 'string');
+
+    if (callStages.length === 0) {
+      addIssue(
+        errors,
+        'CALLS_EMPTY',
+        'Non-error live evidence must contain model call records',
+        'manifest.json'
+      );
+    }
+
+    const compilerIndex = callStages.indexOf('compiler');
+    if (compilerIndex < 0) {
+      addIssue(
+        errors,
+        'CALL_SEQUENCE_INVALID',
+        'Non-error live evidence must contain a compiler call',
+        'manifest.json'
+      );
+    }
+
+    if (status === 'OUTPUT') {
+      const generatorIndex = callStages.indexOf('generator');
+      const validatorIndex = callStages.indexOf('validator');
+      if (
+        compilerIndex < 0 ||
+        generatorIndex < 0 ||
+        validatorIndex < 0 ||
+        !(compilerIndex < generatorIndex && generatorIndex < validatorIndex)
+      ) {
+        addIssue(
+          errors,
+          'CALL_SEQUENCE_INVALID',
+          'OUTPUT evidence must contain compiler -> generator -> validator calls in order',
+          'manifest.json'
+        );
+      }
+    }
+
+    if (
+      manifestInput &&
+      manifestInput.semantic_ids === null &&
+      compilerIndex >= 0
+    ) {
+      const plannerIndex = callStages.indexOf('retrieval_planner');
+      if (plannerIndex < 0 || plannerIndex > compilerIndex) {
+        addIssue(
+          errors,
+          'CALL_SEQUENCE_INVALID',
+          'Planner-driven live evidence must contain retrieval_planner before compiler',
           'manifest.json'
         );
       }
