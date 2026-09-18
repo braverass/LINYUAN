@@ -1,0 +1,29 @@
+version: "0.5"
+
+active_context:
+  facts:
+    type: array
+    description: "Normalized semantic facts. No source text."
+
+  constraints:
+    type: array
+    description: "Hard constraints for generation."
+
+  unknowns:
+    type: array
+    description: "Known missing information."
+
+  inference_barriers:
+    type: array
+    description: "Forbidden automatic inference rules."
+
+  scene_state:
+    type: object
+    description: "Current fictional state supplied to generator."
+
+forbidden_fields:
+  - raw_canon
+  - canon_excerpt
+  - provenance
+  - source_path
+  - evidence_refs
