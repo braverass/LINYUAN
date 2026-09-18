@@ -1,0 +1,42 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+title: "LINYUAN Spec 0.6 Eval Report"
+type: object
+additionalProperties: false
+required: [version, cases, metrics, case_results]
+properties:
+  version:
+    const: "0.6"
+  cases:
+    type: integer
+    minimum: 0
+  metrics:
+    type: object
+    additionalProperties: false
+    required:
+      - retrieval_recall
+      - constraint_fidelity
+      - forbidden_inference_rate
+      - ir_overconstraint_rate
+      - need_context_precision
+      - need_context_recall
+      - behavioral_diversity
+      - validator_false_positive_rate
+      - validator_false_negative_rate
+      - patch_locality
+      - metamorphic_invariance_rate
+    properties:
+      retrieval_recall: { type: number, minimum: 0, maximum: 1 }
+      constraint_fidelity: { type: number, minimum: 0, maximum: 1 }
+      forbidden_inference_rate: { type: number, minimum: 0, maximum: 1 }
+      ir_overconstraint_rate: { type: number, minimum: 0, maximum: 1 }
+      need_context_precision: { type: number, minimum: 0, maximum: 1 }
+      need_context_recall: { type: number, minimum: 0, maximum: 1 }
+      behavioral_diversity: { type: number, minimum: 0, maximum: 1 }
+      validator_false_positive_rate: { type: number, minimum: 0, maximum: 1 }
+      validator_false_negative_rate: { type: number, minimum: 0, maximum: 1 }
+      patch_locality: { type: number, minimum: 0, maximum: 1 }
+      metamorphic_invariance_rate: { type: number, minimum: 0, maximum: 1 }
+  case_results:
+    type: array
+    items:
+      type: object
