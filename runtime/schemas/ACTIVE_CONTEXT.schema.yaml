@@ -9,7 +9,6 @@ required:
   - unknowns
   - inference_barriers
   - open_dimensions
-  - scene_state
 properties:
   version:
     const: "0.5"
@@ -69,8 +68,5 @@ properties:
       pacing: { type: boolean }
       nonverbal_behavior: { type: boolean }
       emotional_expression: { type: boolean }
-  scene_state:
-    type: object
-
 # These fields are forbidden by additionalProperties and by runtime/compiler.ts:
 # raw_canon, canon_excerpt, provenance, source_id, source_path, evidence_refs
