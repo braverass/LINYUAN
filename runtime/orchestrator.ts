@@ -39,8 +39,14 @@ export type RetrievalPlannerAdapter = (
   request: string
 ) => Promise<string[]>;
 
+export type InitialRetrievalPlannerAdapter = (
+  request: string,
+  sceneState: Record<string, unknown>
+) => Promise<string[]>;
+
 export interface RuntimeAdapters {
   retrieve: RetrieverAdapter;
+  planInitialRetrieval?: InitialRetrievalPlannerAdapter;
   planAdditionalRetrieval: RetrievalPlannerAdapter;
   compile: CompilerAdapter;
   generate: GeneratorAdapter;
@@ -52,7 +58,7 @@ export interface FictionRunInput {
   system: string;
   request: string;
   sceneState: Record<string, unknown>;
-  semanticIds: string[];
+  semanticIds?: string[];
   maxContextRounds?: number;
 }
 
@@ -114,7 +120,21 @@ export async function runFiction(
   const trace = newRunTrace(randomUUID());
   const maxRounds = input.maxContextRounds ?? 3;
 
-  let canonFragments = await adapters.retrieve([...input.semanticIds]);
+  let initialSemanticIds: string[];
+  if (input.semanticIds !== undefined) {
+    initialSemanticIds = [...input.semanticIds];
+  } else if (adapters.planInitialRetrieval) {
+    initialSemanticIds = await adapters.planInitialRetrieval(
+      input.request,
+      structuredClone(input.sceneState)
+    );
+  } else {
+    throw new Error(
+      'FictionRunInput.semanticIds or RuntimeAdapters.planInitialRetrieval is required'
+    );
+  }
+
+  let canonFragments = await adapters.retrieve(initialSemanticIds);
   recordRetrieval(trace, canonFragments);
 
   for (let round = 0; round < maxRounds; round += 1) {

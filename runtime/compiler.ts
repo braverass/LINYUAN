@@ -100,7 +100,7 @@ export function sanitizeActiveContext(context: ActiveContext): ActiveContext {
     }
   }
 
-  return structuredClone(context);
+  return canonicalizeActiveContext(structuredClone(context));
 }
 
 function sortById<T extends { id: string }>(items: T[]): T[] {
@@ -121,15 +121,20 @@ function canonicalize(value: unknown): unknown {
   return value;
 }
 
-export function normalizeActiveContext(context: ActiveContext): string {
-  const normalized: ActiveContext = {
-    ...context,
+export function canonicalizeActiveContext(
+  context: ActiveContext
+): ActiveContext {
+  return {
+    ...structuredClone(context),
     facts: sortById(context.facts),
     constraints: sortById(context.constraints),
     unknowns: sortById(context.unknowns),
     inference_barriers: sortById(context.inference_barriers),
   };
-  return JSON.stringify(canonicalize(normalized));
+}
+
+export function normalizeActiveContext(context: ActiveContext): string {
+  return JSON.stringify(canonicalize(canonicalizeActiveContext(context)));
 }
 
 export async function compileWithAdapter(

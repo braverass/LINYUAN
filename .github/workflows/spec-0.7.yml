@@ -1,0 +1,31 @@
+name: Spec 0.7 Real Model Boundary
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "evals/**"
+      - "runtime/**"
+      - "SOURCE_REGISTRY.yaml"
+      - "package.json"
+      - "tsconfig.json"
+      - ".github/workflows/spec-0.7.yml"
+  pull_request:
+    paths:
+      - "evals/**"
+      - "runtime/**"
+      - "SOURCE_REGISTRY.yaml"
+      - "package.json"
+      - "tsconfig.json"
+      - ".github/workflows/spec-0.7.yml"
+
+jobs:
+  real-model-boundary-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm install --ignore-scripts
+      - run: npm run ci

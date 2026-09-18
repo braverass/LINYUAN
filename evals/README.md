@@ -69,29 +69,17 @@ High-is-good metrics use minimum thresholds. Error rates use maximum thresholds.
 
 A score of 1.0 from the reference executor is **not** a claim about model quality. That would be the evaluation equivalent of grading your own exam with the answer key open.
 
-## Real candidate adapter
+## Candidate execution
 
-Set `EVAL_ADAPTER` to a TypeScript/JavaScript module exporting:
+The original `EVAL_ADAPTER` hook remains a Spec 0.6 harness extension and receives the full EvalCase. It is suitable for deterministic harness self-tests, not for a trustworthy real-model baseline.
 
-```ts
-export default async function executor(testCase): Promise<EvalObservation> {
-  // run retrieval/compiler/generator/validator here
-}
-```
-
-The adapter is responsible for running a candidate stack and judging semantic requirement IDs. The harness stays model/provider agnostic.
-
-Example:
+Spec 0.7 adds the real candidate path:
 
 ```bash
-EVAL_ADAPTER=./my-eval-adapter.ts npm run eval -- --enforce
+npm run eval:real
 ```
 
-Optional:
-
-```bash
-EVAL_OUTPUT=./report.json npm run eval
-```
+That path splits each EvalCase into candidate-visible input and evaluator-only gold before any candidate model call. The production runtime never receives the gold labels. See `SPEC_0.7.md` for provider configuration, Judge separation, repeated Generator sampling and run manifests.
 
 ## Metamorphic test
 
