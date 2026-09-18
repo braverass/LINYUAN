@@ -1,0 +1,36 @@
+name: Spec 0.5 Runtime
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "SOURCE_REGISTRY.yaml"
+      - "AI_ENTRY.md"
+      - "MODE-FICTION.md"
+      - "MODE-EXPLAIN.md"
+      - "00A-按需读取与写作执行协议.md"
+      - "runtime/**"
+      - "package.json"
+      - "tsconfig.json"
+      - ".github/workflows/spec-0.5.yml"
+  pull_request:
+    paths:
+      - "SOURCE_REGISTRY.yaml"
+      - "AI_ENTRY.md"
+      - "MODE-FICTION.md"
+      - "MODE-EXPLAIN.md"
+      - "00A-按需读取与写作执行协议.md"
+      - "runtime/**"
+      - "package.json"
+      - "tsconfig.json"
+
+jobs:
+  runtime-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm install --ignore-scripts
+      - run: npm run ci
