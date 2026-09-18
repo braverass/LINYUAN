@@ -49,7 +49,6 @@ const semanticCompiler: CompilerAdapter = async (input) => {
         nonverbal_behavior: true,
         emotional_expression: true,
       },
-      scene_state: input.sceneState,
     },
     provenance: {
       F1: {
