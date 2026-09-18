@@ -1,0 +1,34 @@
+name: Spec 1.0 Evidence Verification
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "runtime/**"
+      - "package.json"
+      - "SPEC-0.9-LIVE-E2E.md"
+      - "SPEC-1.0-EVIDENCE-VERIFICATION.md"
+      - ".github/workflows/spec-0.9-live.yml"
+      - ".github/workflows/spec-1.0.yml"
+  pull_request:
+    paths:
+      - "runtime/**"
+      - "package.json"
+      - "SPEC-0.9-LIVE-E2E.md"
+      - "SPEC-1.0-EVIDENCE-VERIFICATION.md"
+      - ".github/workflows/spec-0.9-live.yml"
+      - ".github/workflows/spec-1.0.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  evidence-verification:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm install --ignore-scripts
+      - run: npm run ci
