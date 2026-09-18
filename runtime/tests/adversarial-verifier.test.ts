@@ -537,3 +537,35 @@ test('adversarial matrix: malformed call hashes/settings/usage cannot be made va
     }
   }
 });
+
+
+test('adversarial: non-output success states cannot be justified by an unrelated call', async () => {
+  const runDir = await mkdtemp(path.join(os.tmpdir(), 'linyuan-adv-fake-conflict-'));
+  try {
+    await validBundle(runDir);
+    const manifestPath = path.join(runDir, 'manifest.json');
+    const manifest = await readJson(manifestPath);
+    const calls = await readJson(path.join(runDir, 'calls.json'));
+
+    const unrelated = calls.find((call: any) => call.stage === 'generator');
+    assert.ok(unrelated);
+    manifest.status = 'CONFLICT';
+    manifest.calls = [unrelated];
+    delete manifest.artifacts['output.md'];
+    await unlink(path.join(runDir, 'output.md'));
+    await writeTrackedJson(runDir, 'calls.json', [unrelated], manifest);
+    await writeTrackedJson(
+      runDir,
+      'result.json',
+      { status: 'CONFLICT', conflict: 'fabricated conflict' },
+      manifest
+    );
+    await writeFile(manifestPath, JSON.stringify(manifest, null, 2) + '\n', 'utf8');
+
+    const report = await verifyLiveFictionBundle(runDir);
+    assert.equal(report.ok, false);
+    assert.equal(report.errors.some((i) => i.code === 'CALL_STAGE_REQUIRED'), true);
+  } finally {
+    await rm(runDir, { recursive: true, force: true });
+  }
+});
