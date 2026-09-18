@@ -41,6 +41,35 @@ function hasOwn(record: JsonRecord, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(record, key);
 }
 
+const LIVE_CALL_STAGES = new Set([
+  'retrieval_planner',
+  'compiler',
+  'generator',
+  'validator',
+  'patcher',
+]);
+
+const LIVE_PROVIDERS = new Set(['openai', 'gemini', 'anthropic']);
+
+function validProviderId(value: unknown): boolean {
+  return (
+    value === null ||
+    (typeof value === 'string' && value.trim().length > 0)
+  );
+}
+
+function validSha256(value: unknown): boolean {
+  return typeof value === 'string' && /^[0-9a-f]{64}$/.test(value);
+}
+
+function validNonNegativeInteger(value: unknown): boolean {
+  return Number.isSafeInteger(value) && (value as number) >= 0;
+}
+
+function validNullableFiniteNumber(value: unknown): boolean {
+  return value === null || (typeof value === 'number' && Number.isFinite(value));
+}
+
 function addIssue(
   errors: LiveBundleVerificationIssue[],
   code: string,
@@ -86,6 +115,65 @@ function expectedArtifacts(status: string): string[] | null {
   if (status === 'NEED_CONTEXT' || status === 'CONFLICT') {
     return ['input.json', 'trace.json', 'calls.json', 'result.json'];
   }
+  if (manifestCalls && status && status !== 'ERROR') {
+    const callStages = manifestCalls
+      .map((rawCall) => asRecord(rawCall)?.stage)
+      .filter((stage): stage is string => typeof stage === 'string');
+
+    if (callStages.length === 0) {
+      addIssue(
+        errors,
+        'CALLS_EMPTY',
+        'Non-error live evidence must contain model call records',
+        'manifest.json'
+      );
+    }
+
+    const compilerIndex = callStages.indexOf('compiler');
+    if (compilerIndex < 0) {
+      addIssue(
+        errors,
+        'CALL_SEQUENCE_INVALID',
+        'Non-error live evidence must contain a compiler call',
+        'manifest.json'
+      );
+    }
+
+    if (status === 'OUTPUT') {
+      const generatorIndex = callStages.indexOf('generator');
+      const validatorIndex = callStages.indexOf('validator');
+      if (
+        compilerIndex < 0 ||
+        generatorIndex < 0 ||
+        validatorIndex < 0 ||
+        !(compilerIndex < generatorIndex && generatorIndex < validatorIndex)
+      ) {
+        addIssue(
+          errors,
+          'CALL_SEQUENCE_INVALID',
+          'OUTPUT evidence must contain compiler -> generator -> validator calls in order',
+          'manifest.json'
+        );
+      }
+    }
+
+    if (
+      manifestInput &&
+      manifestInput.semantic_ids === null &&
+      compilerIndex >= 0
+    ) {
+      const plannerIndex = callStages.indexOf('retrieval_planner');
+      if (plannerIndex < 0 || plannerIndex > compilerIndex) {
+        addIssue(
+          errors,
+          'CALL_SEQUENCE_INVALID',
+          'Planner-driven live evidence must contain retrieval_planner before compiler',
+          'manifest.json'
+        );
+      }
+    }
+  }
+
   if (status === 'ERROR') {
     return ['input.json', 'calls.json', 'failure.json'];
   }
@@ -413,6 +501,15 @@ export async function verifyLiveFictionBundle(
   }
 
   const stageModels = asRecord(manifest.stage_models);
+  if (!stageModels) {
+    addIssue(
+      errors,
+      'STAGE_MODELS_INVALID',
+      'manifest.stage_models must be an object',
+      'manifest.json'
+    );
+  }
+
   if (manifestCalls && stageModels) {
     for (const rawCall of manifestCalls) {
       const call = asRecord(rawCall);
@@ -425,10 +522,17 @@ export async function verifyLiveFictionBundle(
         );
         continue;
       }
+      if (!LIVE_CALL_STAGES.has(call.stage)) {
+        addIssue(
+          errors,
+          'CALL_STAGE_INVALID',
+          'Call stage is not valid for live fiction evidence: ' + call.stage,
+          'manifest.json'
+        );
+      }
       if (
         !hasOwn(call, 'request_id') ||
-        (call.request_id !== null &&
-          (typeof call.request_id !== 'string' || call.request_id.length === 0))
+        !validProviderId(call.request_id)
       ) {
         addIssue(
           errors,
@@ -439,8 +543,7 @@ export async function verifyLiveFictionBundle(
       }
       if (
         hasOwn(call, 'response_id') &&
-        call.response_id !== null &&
-        (typeof call.response_id !== 'string' || call.response_id.length === 0)
+        !validProviderId(call.response_id)
       ) {
         addIssue(
           errors,
@@ -448,6 +551,119 @@ export async function verifyLiveFictionBundle(
           'Call response_id must be null or a non-empty string when present',
           'manifest.json'
         );
+      }
+
+      if (
+        typeof call.provider !== 'string' ||
+        !LIVE_PROVIDERS.has(call.provider)
+      ) {
+        addIssue(
+          errors,
+          'CALL_PROVIDER_INVALID',
+          'Call provider must be openai, gemini, or anthropic',
+          'manifest.json'
+        );
+      }
+      if (typeof call.model !== 'string' || call.model.trim().length === 0) {
+        addIssue(
+          errors,
+          'CALL_MODEL_INVALID',
+          'Call model must be a non-empty string',
+          'manifest.json'
+        );
+      }
+      if (!validSha256(call.request_hash)) {
+        addIssue(
+          errors,
+          'CALL_REQUEST_HASH_INVALID',
+          'Call request_hash must be a lowercase SHA-256 digest',
+          'manifest.json'
+        );
+      }
+      if (!validSha256(call.response_hash)) {
+        addIssue(
+          errors,
+          'CALL_RESPONSE_HASH_INVALID',
+          'Call response_hash must be a lowercase SHA-256 digest',
+          'manifest.json'
+        );
+      }
+      if (
+        call.response_format !== 'json' &&
+        call.response_format !== 'text'
+      ) {
+        addIssue(
+          errors,
+          'CALL_RESPONSE_FORMAT_INVALID',
+          'Call response_format must be json or text',
+          'manifest.json'
+        );
+      }
+      if (
+        typeof call.latency_ms !== 'number' ||
+        !Number.isFinite(call.latency_ms) ||
+        call.latency_ms < 0
+      ) {
+        addIssue(
+          errors,
+          'CALL_LATENCY_INVALID',
+          'Call latency_ms must be a non-negative finite number',
+          'manifest.json'
+        );
+      }
+
+      if (call.usage !== null) {
+        const usage = asRecord(call.usage);
+        if (!usage) {
+          addIssue(
+            errors,
+            'CALL_USAGE_INVALID',
+            'Call usage must be null or an object',
+            'manifest.json'
+          );
+        } else {
+          for (const key of ['inputTokens', 'outputTokens', 'totalTokens']) {
+            if (hasOwn(usage, key) && !validNonNegativeInteger(usage[key])) {
+              addIssue(
+                errors,
+                'CALL_USAGE_INVALID',
+                'Call usage token counts must be non-negative safe integers',
+                'manifest.json'
+              );
+              break;
+            }
+          }
+        }
+      }
+
+      const settings = asRecord(call.settings);
+      if (!settings) {
+        addIssue(
+          errors,
+          'CALL_SETTINGS_INVALID',
+          'Call settings must be an object',
+          'manifest.json'
+        );
+      } else {
+        for (const key of [
+          'temperature',
+          'top_p',
+          'max_output_tokens',
+          'seed',
+        ]) {
+          if (
+            !hasOwn(settings, key) ||
+            !validNullableFiniteNumber(settings[key])
+          ) {
+            addIssue(
+              errors,
+              'CALL_SETTINGS_INVALID',
+              'Call settings must contain finite numbers or null for all recorded settings',
+              'manifest.json'
+            );
+            break;
+          }
+        }
       }
 
       const descriptor = asRecord(stageModels[call.stage]);
