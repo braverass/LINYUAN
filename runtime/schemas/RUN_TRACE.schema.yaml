@@ -1,13 +1,80 @@
-version: "0.5"
+$schema: "https://json-schema.org/draft/2020-12/schema"
+title: "RUN_TRACE Spec 0.5"
+type: object
+additionalProperties: false
+required:
+  - version
+  - run_id
+  - retrieval
+  - compiler
+  - generator
+  - validator
+  - patcher
+properties:
+  version:
+    const: "0.5"
+  run_id:
+    type: string
+    minLength: 1
+  retrieval:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      required: [semantic_id, content_hash]
+      properties:
+        semantic_id: { type: string }
+        content_hash: { type: string }
+  compiler:
+    type: object
+    additionalProperties: false
+    required: [active_context_hashes, provenance]
+    properties:
+      active_context_hashes:
+        type: array
+        items: { type: string }
+      provenance:
+        type: array
+        items: { type: object }
+  generator:
+    type: object
+    additionalProperties: false
+    required: [call_count, payload_hashes, need_context]
+    properties:
+      call_count: { type: integer, minimum: 0 }
+      payload_hashes:
+        type: array
+        items: { type: string }
+      need_context:
+        type: array
+        items:
+          type: array
+          items: { type: object }
+  validator:
+    type: object
+    additionalProperties: false
+    required: [violations]
+    properties:
+      violations:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [id, severity, evidence_refs]
+          properties:
+            id: { type: string }
+            severity: { type: string }
+            evidence_refs:
+              type: array
+              items: { type: string }
+  patcher:
+    type: object
+    additionalProperties: false
+    required: [scopes]
+    properties:
+      scopes:
+        type: array
+        items:
+          type: object
 
-trace:
-  fields:
-    run_id: string
-    retrieval: array
-    provenance: array
-    validator_result: array
-    hashes: object
-
-rules:
-  runtime_only: true
-  generator_visible: false
+# RUN_TRACE is runtime/debug data and is never a Generator/Patcher input.
