@@ -117,6 +117,9 @@ function createOpenAIClient(config: ProviderConfig): ModelClient {
     defaults,
     async complete(request): Promise<ModelResponse> {
       const settings = mergedDefaults(defaults, request);
+      if (settings.seed !== undefined) {
+        throw new Error('OpenAI Responses adapter does not support seed');
+      }
       const body: Record<string, unknown> = {
         model: config.model,
         input: request.prompt,
@@ -186,6 +189,7 @@ function createGeminiClient(config: ProviderConfig): ModelClient {
         generationConfig.temperature = settings.temperature;
       }
       if (settings.topP !== undefined) generationConfig.topP = settings.topP;
+      if (settings.seed !== undefined) generationConfig.seed = settings.seed;
       if (request.responseFormat === 'json') {
         generationConfig.responseMimeType = 'application/json';
       }
@@ -274,6 +278,9 @@ function createAnthropicClient(config: ProviderConfig): ModelClient {
     defaults,
     async complete(request): Promise<ModelResponse> {
       const settings = mergedDefaults(defaults, request);
+      if (settings.seed !== undefined) {
+        throw new Error('Anthropic Messages adapter does not support seed');
+      }
       const body: Record<string, unknown> = {
         model: config.model,
         max_tokens: settings.maxOutputTokens ?? 4096,
