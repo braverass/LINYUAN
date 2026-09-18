@@ -410,7 +410,16 @@ export async function verifyLiveFictionBundle(
 
   for (const [name, metadata] of artifactMetadata) {
     const entry = entryMap.get(name);
-    if (!entry || !entry.isFile()) continue;
+    if (!entry) {
+      addIssue(
+        errors,
+        'ARTIFACT_MISSING',
+        'Artifact is tracked by the manifest but missing from the run directory',
+        name
+      );
+      continue;
+    }
+    if (!entry.isFile()) continue;
     try {
       const content = await readFile(path.join(runDir, name));
       let valid = true;
