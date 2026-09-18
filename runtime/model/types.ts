@@ -38,6 +38,7 @@ export interface ModelResponse {
   text: string;
   latencyMs: number;
   requestId?: string;
+  responseId?: string;
   usage?: ModelUsage;
 }
 
@@ -57,6 +58,7 @@ export interface ModelCallRecord {
   response_format: 'text' | 'json';
   latency_ms: number;
   request_id: string | null;
+  response_id: string | null;
   usage: ModelUsage | null;
   settings: {
     temperature: number | null;

@@ -32,7 +32,7 @@ async function postJson(
   url: string,
   headers: Record<string, string>,
   body: Record<string, unknown>
-): Promise<{ data: Record<string, unknown>; latencyMs: number }> {
+): Promise<{ data: Record<string, unknown>; latencyMs: number; requestId?: string }> {
   const started = Date.now();
   const response = await fetch(url, {
     method: 'POST',
@@ -40,19 +40,26 @@ async function postJson(
     body: JSON.stringify(body),
   });
   const responseText = await response.text();
+  const requestId =
+    response.headers.get('request-id') ??
+    response.headers.get('x-request-id') ??
+    undefined;
   if (!response.ok) {
     throw new Error(
       'Model API request failed (' +
         response.status +
         ' ' +
         response.statusText +
-        '): ' +
+        ')' +
+        (requestId ? ' [request-id ' + requestId + ']' : '') +
+        ': ' +
         responseText.slice(0, 1200)
     );
   }
   return {
     data: JSON.parse(responseText) as Record<string, unknown>,
     latencyMs: Date.now() - started,
+    ...(requestId ? { requestId } : {}),
   };
 }
 
@@ -127,7 +134,7 @@ function createOpenAIClient(config: ProviderConfig): ModelClient {
       }
       if (settings.topP !== undefined) body.top_p = settings.topP;
 
-      const { data, latencyMs } = await postJson(
+      const { data, latencyMs, requestId } = await postJson(
         baseUrl + '/responses',
         {
           Authorization: 'Bearer ' + config.apiKey,
@@ -151,7 +158,8 @@ function createOpenAIClient(config: ProviderConfig): ModelClient {
         text: openAIText(data),
         latencyMs,
       };
-      if (typeof data.id === 'string') result.requestId = data.id;
+      if (requestId) result.requestId = requestId;
+      if (typeof data.id === 'string') result.responseId = data.id;
       if (usage) result.usage = usage;
       return result;
     },
@@ -197,7 +205,7 @@ function createGeminiClient(config: ProviderConfig): ModelClient {
         body.generationConfig = generationConfig;
       }
 
-      const { data, latencyMs } = await postJson(
+      const { data, latencyMs, requestId } = await postJson(
         baseUrl +
           '/models/' +
           encodeURIComponent(config.model) +
@@ -248,7 +256,8 @@ function createGeminiClient(config: ProviderConfig): ModelClient {
         text,
         latencyMs,
       };
-      if (typeof data.responseId === 'string') result.requestId = data.responseId;
+      if (requestId) result.requestId = requestId;
+      if (typeof data.responseId === 'string') result.responseId = data.responseId;
       if (usage) result.usage = usage;
       return result;
     },
@@ -274,7 +283,7 @@ function createAnthropicClient(config: ProviderConfig): ModelClient {
       if (settings.temperature !== undefined) body.temperature = settings.temperature;
       if (settings.topP !== undefined) body.top_p = settings.topP;
 
-      const { data, latencyMs } = await postJson(
+      const { data, latencyMs, requestId } = await postJson(
         baseUrl + '/v1/messages',
         {
           Authorization: 'Bearer ' + config.apiKey,
@@ -311,7 +320,8 @@ function createAnthropicClient(config: ProviderConfig): ModelClient {
         text,
         latencyMs,
       };
-      if (typeof data.id === 'string') result.requestId = data.id;
+      if (requestId) result.requestId = requestId;
+      if (typeof data.id === 'string') result.responseId = data.id;
       if (usage) result.usage = usage;
       return result;
     },

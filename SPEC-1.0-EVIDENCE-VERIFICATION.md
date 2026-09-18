@@ -44,6 +44,15 @@ The verifier checks:
 
 Exit code is `0` only when every check passes; otherwise it is `1`.
 
+## Provider call identity
+
+New live call records distinguish two provider-native identifiers when available:
+
+- `request_id` is the HTTP/API request identifier returned by the provider response headers, such as OpenAI `x-request-id` or Claude `request-id`.
+- `response_id` is the provider response object identifier from the JSON payload, such as an OpenAI response ID, Gemini `responseId`, or Claude message ID.
+
+The two identifiers are intentionally not conflated. Older 0.9 bundles without `response_id` remain valid because the verifier treats the manifest as recorded evidence and does not require this additive field.
+
 ## CI and live workflow
 
 Normal CI runs the verifier tests with fixture model clients and does not spend provider credits.

@@ -84,6 +84,7 @@ async function invoke(
     response_format: request.responseFormat,
     latency_ms: response.latencyMs,
     request_id: response.requestId ?? null,
+    response_id: response.responseId ?? null,
     usage: response.usage ? structuredClone(response.usage) : null,
     settings: {
       temperature: effectiveSetting(
