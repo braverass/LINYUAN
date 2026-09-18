@@ -4,6 +4,7 @@ export interface Violation {
   location?: unknown;
   actual?: unknown;
   required_state?: unknown;
+  patch_contract?: unknown;
 }
 
 export function validate(_draft: string): Violation[] {
