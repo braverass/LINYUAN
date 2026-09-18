@@ -487,6 +487,16 @@ function specializedClient(mode: 'NEED_CONTEXT' | 'CONFLICT' | 'ERROR'): ModelCl
     model: 'fixture-model',
     defaults: {},
     async complete(request: ModelRequest): Promise<ModelResponse> {
+      if (request.stage === 'retrieval_planner' && mode === 'NEED_CONTEXT') {
+        return {
+          provider: 'openai',
+          model: 'fixture-model',
+          latencyMs: 1,
+          requestId: 'req-retrieval',
+          responseId: 'resp-retrieval',
+          text: JSON.stringify({ semantic_ids: [] }),
+        };
+      }
       if (request.stage === 'compiler') {
         if (mode === 'NEED_CONTEXT') {
           return {
