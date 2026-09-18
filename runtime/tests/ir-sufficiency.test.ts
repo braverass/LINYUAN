@@ -35,7 +35,6 @@ test('NEED_CONTEXT causes retrieval/recompile and a fresh Generator call', async
           nonverbal_behavior: true,
           emotional_expression: true,
         },
-        scene_state: input.sceneState,
       },
       provenance: {},
     }),
