@@ -173,6 +173,49 @@ function validateSettings(
   }
 }
 
+function validateModelDefaults(
+  value: unknown,
+  errors: LiveBundleVerificationIssue[],
+  stage: string
+): JsonRecord | null {
+  const defaults = asRecord(value);
+  if (!defaults) {
+    addIssue(
+      errors,
+      'STAGE_MODEL_DEFAULTS_INVALID',
+      'Stage model defaults must be an object for ' + stage,
+      'manifest.json'
+    );
+    return null;
+  }
+
+  for (const key of ['temperature', 'topP', 'maxOutputTokens', 'seed']) {
+    if (
+      hasOwn(defaults, key) &&
+      (typeof defaults[key] !== 'number' || !Number.isFinite(defaults[key]))
+    ) {
+      addIssue(
+        errors,
+        'STAGE_MODEL_DEFAULTS_INVALID',
+        'Stage model default ' + key + ' must be a finite number when present',
+        'manifest.json'
+      );
+    }
+  }
+  return defaults;
+}
+
+function settingsFromDefaults(defaults: JsonRecord): JsonRecord {
+  return {
+    temperature: hasOwn(defaults, 'temperature') ? defaults.temperature : null,
+    top_p: hasOwn(defaults, 'topP') ? defaults.topP : null,
+    max_output_tokens: hasOwn(defaults, 'maxOutputTokens')
+      ? defaults.maxOutputTokens
+      : null,
+    seed: hasOwn(defaults, 'seed') ? defaults.seed : null,
+  };
+}
+
 export async function verifyLiveFictionBundle(
   runDirInput: string
 ): Promise<LiveBundleVerificationReport> {
@@ -453,6 +496,16 @@ export async function verifyLiveFictionBundle(
     }
   }
 
+  const runtimeContract = asRecord(manifest.runtime_contract);
+  if (status && status !== 'ERROR' && !runtimeContract) {
+    addIssue(
+      errors,
+      'RUNTIME_CONTRACT_INVALID',
+      'Non-error manifest.runtime_contract must be an object',
+      'manifest.json'
+    );
+  }
+
   const manifestInput = asRecord(manifest.input);
   const inputValue = artifactMetadata.has('input.json')
     ? await readJsonArtifact(runDir, 'input.json', errors)
@@ -505,6 +558,60 @@ export async function verifyLiveFictionBundle(
         'system_override presence does not match manifest.input.custom_system',
         'input.json'
       );
+    }
+
+
+    if (status && status !== 'ERROR') {
+      if (
+        !Number.isSafeInteger(input.max_context_rounds) ||
+        (input.max_context_rounds as number) < 1
+      ) {
+        addIssue(
+          errors,
+          'INPUT_CONTEXT_ROUNDS_INVALID',
+          'Successful input.max_context_rounds must be a positive safe integer',
+          'input.json'
+        );
+      }
+
+      const semanticIds = input.semantic_ids;
+      if (
+        semanticIds !== null &&
+        (!Array.isArray(semanticIds) ||
+          semanticIds.some(
+            (item) => typeof item !== 'string' || item.trim().length === 0
+          ))
+      ) {
+        addIssue(
+          errors,
+          'INPUT_SEMANTIC_IDS_INVALID',
+          'Successful input.semantic_ids must be null or an array of non-empty strings',
+          'input.json'
+        );
+      }
+
+      if (!asRecord(input.scene_state)) {
+        addIssue(
+          errors,
+          'INPUT_SCENE_STATE_INVALID',
+          'Successful input.scene_state must be a JSON object',
+          'input.json'
+        );
+      }
+
+      if (
+        customSystem &&
+        (typeof input.system_override !== 'string' ||
+          !runtimeContract ||
+          runtimeContract.system_hash !== stableHash(input.system_override))
+      ) {
+        addIssue(
+          errors,
+          'INPUT_SYSTEM_HASH_MISMATCH',
+          'system_override content does not match runtime_contract.system_hash',
+          'input.json'
+        );
+      }
     }
   } else if (artifactMetadata.has('input.json')) {
     addIssue(
@@ -570,6 +677,9 @@ export async function verifyLiveFictionBundle(
           'manifest.json'
         );
       }
+      if (descriptor) {
+        validateModelDefaults(descriptor.defaults, errors, stage);
+      }
     }
 
     if (status && status !== 'ERROR') {
@@ -586,8 +696,9 @@ export async function verifyLiveFictionBundle(
     }
   }
 
+  const callStageCounts = new Map<string, number>();
+  const callStages: string[] = [];
   if (manifestCalls) {
-    const callStageCounts = new Map<string, number>();
     for (const rawCall of manifestCalls) {
       const call = asRecord(rawCall);
       if (!call || typeof call.stage !== 'string') {
@@ -601,6 +712,7 @@ export async function verifyLiveFictionBundle(
       }
 
       callStageCounts.set(call.stage, (callStageCounts.get(call.stage) ?? 0) + 1);
+      callStages.push(call.stage);
 
       if (!LIVE_STAGES.has(call.stage)) {
         addIssue(
@@ -699,6 +811,23 @@ export async function verifyLiveFictionBundle(
           'manifest.json'
         );
       }
+
+      if (descriptor) {
+        const defaults = asRecord(descriptor.defaults);
+        const settings = asRecord(call.settings);
+        if (
+          defaults &&
+          settings &&
+          !isDeepStrictEqual(settings, settingsFromDefaults(defaults))
+        ) {
+          addIssue(
+            errors,
+            'CALL_SETTINGS_STAGE_DEFAULTS_MISMATCH',
+            'Call settings do not match the configured stage model defaults',
+            'manifest.json'
+          );
+        }
+      }
     }
 
     if (status && status !== 'ERROR' && manifestCalls.length === 0) {
@@ -729,6 +858,42 @@ export async function verifyLiveFictionBundle(
             'manifest.json'
           );
         }
+      }
+    }
+
+    if (status === 'OUTPUT') {
+      const firstCompiler = callStages.indexOf('compiler');
+      const firstGenerator = callStages.indexOf('generator');
+      const lastGenerator = callStages.lastIndexOf('generator');
+      const firstValidator = callStages.indexOf('validator');
+      const firstPatcher = callStages.indexOf('patcher');
+
+      if (
+        firstCompiler < 0 ||
+        firstGenerator < 0 ||
+        firstValidator < 0 ||
+        firstCompiler > firstGenerator ||
+        lastGenerator > firstValidator ||
+        (firstPatcher >= 0 && firstPatcher < firstValidator)
+      ) {
+        addIssue(
+          errors,
+          'CALL_SEQUENCE_INVALID',
+          'OUTPUT call order must preserve compiler -> generator -> validator -> patcher causality',
+          'manifest.json'
+        );
+      }
+
+      if (
+        manifestInput?.semantic_ids === null &&
+        callStages[0] !== 'retrieval_planner'
+      ) {
+        addIssue(
+          errors,
+          'CALL_SEQUENCE_INVALID',
+          'Planner-driven OUTPUT evidence must begin with retrieval_planner',
+          'manifest.json'
+        );
       }
     }
   }
@@ -784,6 +949,67 @@ export async function verifyLiveFictionBundle(
           errors,
           'TRACE_RETRIEVAL_MISMATCH',
           'trace.retrieval does not match manifest.retrieval',
+          'trace.json'
+        );
+      }
+
+      const generatorTrace = asRecord(trace.generator);
+      if (!generatorTrace) {
+        addIssue(
+          errors,
+          'TRACE_GENERATOR_INVALID',
+          'trace.generator must be an object',
+          'trace.json'
+        );
+      } else {
+        const generatorCount = generatorTrace.call_count;
+        if (
+          !Number.isSafeInteger(generatorCount) ||
+          (generatorCount as number) < 0
+        ) {
+          addIssue(
+            errors,
+            'TRACE_GENERATOR_CALL_COUNT_INVALID',
+            'trace.generator.call_count must be a non-negative safe integer',
+            'trace.json'
+          );
+        } else if (
+          manifestCalls &&
+          generatorCount !== (callStageCounts.get('generator') ?? 0)
+        ) {
+          addIssue(
+            errors,
+            'TRACE_GENERATOR_CALL_COUNT_MISMATCH',
+            'trace.generator.call_count does not match generator call evidence',
+            'trace.json'
+          );
+        }
+
+        if (
+          Array.isArray(generatorTrace.payload_hashes) &&
+          Number.isSafeInteger(generatorCount) &&
+          generatorTrace.payload_hashes.length !== generatorCount
+        ) {
+          addIssue(
+            errors,
+            'TRACE_GENERATOR_PAYLOAD_COUNT_MISMATCH',
+            'trace.generator.payload_hashes length does not match call_count',
+            'trace.json'
+          );
+        }
+      }
+
+      const patcherTrace = asRecord(trace.patcher);
+      if (
+        patcherTrace &&
+        Array.isArray(patcherTrace.scopes) &&
+        manifestCalls &&
+        patcherTrace.scopes.length !== (callStageCounts.get('patcher') ?? 0)
+      ) {
+        addIssue(
+          errors,
+          'TRACE_PATCHER_CALL_COUNT_MISMATCH',
+          'trace.patcher.scopes length does not match patcher call evidence',
           'trace.json'
         );
       }
