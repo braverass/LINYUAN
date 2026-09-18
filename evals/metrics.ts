@@ -106,7 +106,12 @@ export function evaluateSuite(
     if (testCase.behavioral_diversity.sample_count > 0) {
       const unique = new Set(observation.behavior_signatures).size;
       const required = testCase.behavioral_diversity.minimum_unique_signatures;
-      diversityScore += required === 0 ? 1 : clamp01(unique / required);
+      const requested = testCase.behavioral_diversity.sample_count;
+      const uniquenessScore = required === 0 ? 1 : clamp01(unique / required);
+      const completionScore = requested === 0
+        ? 1
+        : clamp01(observation.behavior_signatures.length / requested);
+      diversityScore += Math.min(uniquenessScore, completionScore);
       diversityCases += 1;
     }
 
