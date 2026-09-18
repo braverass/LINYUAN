@@ -1,0 +1,41 @@
+version: "0.6"
+id: "behavior.sample-not-policy"
+category: "behavior"
+description: "Behavior samples calibrate possibility in a concrete situation; they are not a probability table or policy."
+request: "给定一个与历史行为样本相近但不相同的新场景，让零渊作出合理反应。不要把案例计票成概率。"
+scene_state:
+  pressure: "moderate"
+  relationship: "stranger"
+  cost: "low"
+required_sources:
+  - "AUTHOR.ROUTER"
+  - "AUTHOR.PERSONALITY"
+  - "AUTHOR.BEHAVIOR_DATASET"
+requirements:
+  - id: "REQ_SAMPLE_CONTEXTUAL"
+    kind: "constraint"
+    description: "A behavior sample is evidence about a concrete possibility, not a universal policy."
+  - id: "REQ_NO_CASE_VOTING"
+    kind: "inference_barrier"
+    description: "Do not convert counts of YES/NO samples into action probability."
+forbidden_inferences:
+  - id: "FI_SAMPLE_IMPLIES_MUST"
+    description: "A YES sample means all similar scenes must choose the same action."
+  - id: "FI_MAJORITY_VOTE"
+    description: "The majority of nearby samples determines the action."
+forbidden_overconstraints:
+  - id: "OC_POSSIBLE_BEHAVIOR_SPACE"
+    description: "Compiler emits a finite possible_behavior_space derived from retrieved samples."
+  - id: "OC_SAMPLE_DIALOGUE_COPY"
+    description: "Generator is constrained to imitate wording or gestures from sample text."
+expected_need_context: []
+behavioral_diversity:
+  sample_count: 8
+  minimum_unique_signatures: 4
+validator:
+  gold_violations:
+    - "V_SAMPLE_AS_POLICY"
+  gold_non_violations:
+    - "N_NEW_ACTION_WITHIN_CONSTRAINTS"
+metamorphic_group: null
+synthetic_canon: null
