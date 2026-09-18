@@ -21,7 +21,6 @@ import {
   assertCandidateInputIsolation,
   splitEvalCase,
   type CandidateInput,
-  type EvalGold,
 } from './candidate-boundary';
 import { judgeCase } from './judge';
 import type { EvalCase, EvalObservation } from './types';
@@ -141,21 +140,10 @@ async function runCandidate(
   };
 }
 
-function normalizeRetrievedSources(
-  trace: RunTrace,
-  candidate: CandidateInput,
-  gold: EvalGold
-): string[] {
-  const sources = trace.retrieval.map((item) => item.semantic_id);
-  if (
-    candidate.synthetic_canon !== null &&
-    sources.includes(SYNTHETIC_SOURCE_ID)
-  ) {
-    for (const expected of gold.required_sources) {
-      if (!sources.includes(expected)) sources.push(expected);
-    }
-  }
-  return [...new Set(sources)];
+function retrievedSources(trace: RunTrace): string[] {
+  return [
+    ...new Set(trace.retrieval.map((item) => item.semantic_id)),
+  ];
 }
 
 export async function executeRealEvalCase(
@@ -183,11 +171,7 @@ export async function executeRealEvalCase(
 
   const observation: EvalObservation = {
     case_id: gold.id,
-    retrieved_sources: normalizeRetrievedSources(
-      candidateRun.trace,
-      candidate,
-      gold
-    ),
+    retrieved_sources: retrievedSources(candidateRun.trace),
     satisfied_requirement_ids:
       judged.result.satisfied_requirement_ids ?? [],
     triggered_forbidden_inference_ids:

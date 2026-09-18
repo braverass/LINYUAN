@@ -58,11 +58,16 @@ export function evaluateSuite(
       observation,
     });
 
-    retrievalHit += intersectionSize(
-      observation.retrieved_sources,
-      testCase.required_sources
-    );
-    retrievalExpected += new Set(testCase.required_sources).size;
+    // Synthetic Canon deliberately bypasses normal retrieval so metamorphic
+    // wording tests isolate Compiler/Generator invariance. Scoring those cases
+    // would either penalize the intentional bypass or invite gold backfilling.
+    if (testCase.synthetic_canon === null) {
+      retrievalHit += intersectionSize(
+        observation.retrieved_sources,
+        testCase.required_sources
+      );
+      retrievalExpected += new Set(testCase.required_sources).size;
+    }
 
     const expectedRequirementIds = testCase.requirements.map((item) => item.id);
     requirementHit += intersectionSize(

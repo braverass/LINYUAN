@@ -12,13 +12,14 @@ import type {
   ModelClient,
   ModelDefaults,
 } from '../runtime/model/types';
-import type { EvalCase } from './types';
+import type { EvalCase, EvalSuiteReport } from './types';
 
 export interface RealEvalManifest {
   version: '0.7';
   created_at: string;
   commit_sha: string;
   case_set_hash: string;
+  report_hash: string;
   stage_models: Record<
     string,
     {
@@ -70,6 +71,7 @@ async function sourceHashes(
 
 export async function buildRealEvalManifest(input: {
   cases: EvalCase[];
+  report: EvalSuiteReport;
   clients: RuntimeModelClients;
   judgeClient: ModelClient;
   calls: ModelCallRecord[];
@@ -81,6 +83,7 @@ export async function buildRealEvalManifest(input: {
     created_at: new Date().toISOString(),
     commit_sha: await detectGitCommit(repoRoot),
     case_set_hash: stableHash(input.cases),
+    report_hash: stableHash(input.report),
     stage_models: {
       retrieval_planner: descriptor(input.clients.retrievalPlanner),
       compiler: descriptor(input.clients.compiler),

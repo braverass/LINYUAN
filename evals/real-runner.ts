@@ -40,6 +40,7 @@ for (const testCase of cases) {
 const report = evaluateSuite(cases, observations);
 const manifest = await buildRealEvalManifest({
   cases,
+  report,
   clients,
   judgeClient,
   calls,

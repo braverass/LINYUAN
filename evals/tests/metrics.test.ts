@@ -85,3 +85,25 @@ test('threshold enforcement rejects bad reports', () => {
     /evaluation thresholds failed/
   );
 });
+
+
+test('synthetic Canon cases do not contaminate retrieval recall', () => {
+  const syntheticCase: EvalCase = {
+    ...structuredClone(testCase),
+    id: 'unit.metrics.synthetic',
+    required_sources: ['GOLD.SOURCE'],
+    synthetic_canon: 'synthetic fixture',
+  };
+  const syntheticObservation: EvalObservation = {
+    ...structuredClone(observation),
+    case_id: syntheticCase.id,
+    retrieved_sources: ['EVAL.SYNTHETIC'],
+  };
+
+  const report = evaluateSuite(
+    [testCase, syntheticCase],
+    [observation, syntheticObservation]
+  );
+
+  assert.equal(report.metrics.retrieval_recall, 0.5);
+});
