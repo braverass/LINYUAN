@@ -89,6 +89,10 @@ For a case requesting N diversity samples:
 
 Compiler variance is therefore not mixed into Generator diversity.
 
+Synthetic Canon metamorphic cases intentionally bypass normal registry retrieval.
+They are excluded from `retrieval_recall`. Their observation records only the
+actual `EVAL.SYNTHETIC` trace; evaluator gold source ids are never backfilled.
+
 ## Evaluator Judge
 
 The Judge has a separate stateless inference call and is the only model-facing component allowed to see EvalGold.
@@ -117,6 +121,7 @@ A real run can emit a separate manifest containing:
 
 - commit SHA;
 - case-set hash;
+- hash of the exact evaluation report paired with the manifest;
 - stage-to-provider/model mapping;
 - per-stage default sampling settings;
 - prompt-template hashes;
@@ -154,5 +159,16 @@ npm run eval:real
 ```
 
 Add `-- --enforce` only when the run is intended to gate against the frozen Spec 0.6 thresholds.
+
+Verify that a saved report and manifest belong to the same run:
+
+```bash
+npm run eval:verify-baseline -- \
+  evals/baselines/report.json \
+  evals/baselines/manifest.json
+```
+
+The verifier recomputes the stable hash of the parsed report and compares it
+with `manifest.report_hash`.
 
 CI never requires external API keys. CI tests the boundary and wiring with deterministic local doubles; real model baselines are explicit experiments.
