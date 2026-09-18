@@ -68,7 +68,6 @@ export interface ActiveContext {
   unknowns: Unknown[];
   inference_barriers: InferenceBarrier[];
   open_dimensions: OpenDimensions;
-  scene_state: Record<string, unknown>;
 }
 
 export interface MissingContext {
