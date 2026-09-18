@@ -28,6 +28,38 @@ function cleanBaseUrl(value: string): string {
   return value.replace(/\/+$/, '');
 }
 
+function sanitizeProviderErrorDetail(
+  message: string,
+  headers: Record<string, string>
+): string {
+  const secrets = new Set<string>();
+  for (const [key, value] of Object.entries(process.env)) {
+    if (
+      /API_KEY|TOKEN|SECRET|PASSWORD/i.test(key) &&
+      typeof value === 'string' &&
+      value.length >= 4
+    ) {
+      secrets.add(value);
+    }
+  }
+  for (const [key, value] of Object.entries(headers)) {
+    if (/authorization|api-key/i.test(key) && value.length >= 4) {
+      secrets.add(value);
+      const bearer = /^Bearer\s+(.+)$/i.exec(value);
+      if (bearer?.[1]) secrets.add(bearer[1]);
+    }
+  }
+
+  let sanitized = message;
+  for (const secret of [...secrets].sort((a, b) => b.length - a.length)) {
+    sanitized = sanitized.split(secret).join('[REDACTED]');
+  }
+  return sanitized.replace(
+    /Bearer\s+[A-Za-z0-9._~+\/=:-]+/gi,
+    'Bearer [REDACTED]'
+  );
+}
+
 async function postJson(
   url: string,
   headers: Record<string, string>,
@@ -53,7 +85,7 @@ async function postJson(
         ')' +
         (requestId ? ' [request-id ' + requestId + ']' : '') +
         ': ' +
-        responseText.slice(0, 1200)
+        sanitizeProviderErrorDetail(responseText.slice(0, 1200), headers)
     );
   }
   return {
@@ -61,6 +93,20 @@ async function postJson(
     latencyMs: Date.now() - started,
     ...(requestId ? { requestId } : {}),
   };
+}
+
+function requiredResponseString(
+  data: Record<string, unknown>,
+  key: string,
+  provider: ModelProvider
+): string {
+  const value = data[key];
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw new Error(
+      'Model API response from ' + provider + ' is missing required ' + key
+    );
+  }
+  return value;
 }
 
 function usageObject(
@@ -117,6 +163,11 @@ function createOpenAIClient(config: ProviderConfig): ModelClient {
     defaults,
     async complete(request): Promise<ModelResponse> {
       const settings = mergedDefaults(defaults, request);
+      if (settings.seed !== undefined) {
+        throw new Error(
+          'OpenAI Responses adapter does not support seed; remove the seed setting'
+        );
+      }
       const body: Record<string, unknown> = {
         model: config.model,
         input: request.prompt,
@@ -154,7 +205,7 @@ function createOpenAIClient(config: ProviderConfig): ModelClient {
       );
       const result: ModelResponse = {
         provider: 'openai',
-        model: typeof data.model === 'string' ? data.model : config.model,
+        model: requiredResponseString(data, 'model', 'openai'),
         text: openAIText(data),
         latencyMs,
       };
@@ -186,6 +237,7 @@ function createGeminiClient(config: ProviderConfig): ModelClient {
         generationConfig.temperature = settings.temperature;
       }
       if (settings.topP !== undefined) generationConfig.topP = settings.topP;
+      if (settings.seed !== undefined) generationConfig.seed = settings.seed;
       if (request.responseFormat === 'json') {
         generationConfig.responseMimeType = 'application/json';
       }
@@ -249,10 +301,7 @@ function createGeminiClient(config: ProviderConfig): ModelClient {
       );
       const result: ModelResponse = {
         provider: 'gemini',
-        model:
-          typeof data.modelVersion === 'string'
-            ? data.modelVersion
-            : config.model,
+        model: requiredResponseString(data, 'modelVersion', 'gemini'),
         text,
         latencyMs,
       };
@@ -274,6 +323,11 @@ function createAnthropicClient(config: ProviderConfig): ModelClient {
     defaults,
     async complete(request): Promise<ModelResponse> {
       const settings = mergedDefaults(defaults, request);
+      if (settings.seed !== undefined) {
+        throw new Error(
+          'Anthropic Messages adapter does not support seed; remove the seed setting'
+        );
+      }
       const body: Record<string, unknown> = {
         model: config.model,
         max_tokens: settings.maxOutputTokens ?? 4096,
@@ -286,7 +340,7 @@ function createAnthropicClient(config: ProviderConfig): ModelClient {
       const { data, latencyMs, requestId } = await postJson(
         baseUrl + '/v1/messages',
         {
-          Authorization: 'Bearer ' + config.apiKey,
+          'x-api-key': config.apiKey,
           'anthropic-version': '2023-06-01',
           'Content-Type': 'application/json',
         },
@@ -316,7 +370,7 @@ function createAnthropicClient(config: ProviderConfig): ModelClient {
       const usage = usageObject(inputTokens, outputTokens, totalTokens);
       const result: ModelResponse = {
         provider: 'anthropic',
-        model: typeof data.model === 'string' ? data.model : config.model,
+        model: requiredResponseString(data, 'model', 'anthropic'),
         text,
         latencyMs,
       };

@@ -92,6 +92,87 @@ function expectedArtifacts(status: string): string[] | null {
   return null;
 }
 
+const LIVE_STAGES = new Set([
+  'retrieval_planner',
+  'compiler',
+  'generator',
+  'validator',
+  'patcher',
+]);
+
+const LIVE_PROVIDERS = new Set(['openai', 'gemini', 'anthropic']);
+
+function isSha256(value: unknown): value is string {
+  return typeof value === 'string' && /^[0-9a-f]{64}$/.test(value);
+}
+
+function isCommitSha(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    (/^[0-9a-f]{40}$/.test(value) || /^[0-9a-f]{64}$/.test(value))
+  );
+}
+
+function isUuid(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+  );
+}
+
+function nonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function validNullableNumber(value: unknown): boolean {
+  return value === null || (typeof value === 'number' && Number.isFinite(value));
+}
+
+function validateUsage(
+  value: unknown,
+  errors: LiveBundleVerificationIssue[]
+): void {
+  if (value === null) return;
+  const usage = asRecord(value);
+  if (!usage) {
+    addIssue(errors, 'CALL_USAGE_INVALID', 'Call usage must be null or an object', 'manifest.json');
+    return;
+  }
+  for (const key of ['inputTokens', 'outputTokens', 'totalTokens']) {
+    if (!hasOwn(usage, key)) continue;
+    const tokenCount = usage[key];
+    if (!Number.isSafeInteger(tokenCount) || (tokenCount as number) < 0) {
+      addIssue(
+        errors,
+        'CALL_USAGE_INVALID',
+        'Call usage token counts must be non-negative safe integers',
+        'manifest.json'
+      );
+    }
+  }
+}
+
+function validateSettings(
+  value: unknown,
+  errors: LiveBundleVerificationIssue[]
+): void {
+  const settings = asRecord(value);
+  if (!settings) {
+    addIssue(errors, 'CALL_SETTINGS_INVALID', 'Call settings must be an object', 'manifest.json');
+    return;
+  }
+  for (const key of ['temperature', 'top_p', 'max_output_tokens', 'seed']) {
+    if (!hasOwn(settings, key) || !validNullableNumber(settings[key])) {
+      addIssue(
+        errors,
+        'CALL_SETTINGS_INVALID',
+        'Call settings must contain nullable finite numeric ' + key,
+        'manifest.json'
+      );
+    }
+  }
+}
+
 export async function verifyLiveFictionBundle(
   runDirInput: string
 ): Promise<LiveBundleVerificationReport> {
@@ -162,6 +243,41 @@ export async function verifyLiveFictionBundle(
       errors,
       'MANIFEST_VERSION_UNSUPPORTED',
       'Expected live manifest version 0.9, got ' + String(manifest.version),
+      'manifest.json'
+    );
+  }
+
+  if (!isUuid(manifest.bundle_id)) {
+    addIssue(
+      errors,
+      'BUNDLE_ID_INVALID',
+      'manifest.bundle_id must be a UUID generated for this execution',
+      'manifest.json'
+    );
+  }
+
+  if (!isCommitSha(manifest.commit_sha)) {
+    addIssue(
+      errors,
+      'COMMIT_SHA_INVALID',
+      'manifest.commit_sha must be a concrete Git commit SHA',
+      'manifest.json'
+    );
+  }
+
+  if (status !== 'ERROR' && !isUuid(manifest.runtime_run_id)) {
+    addIssue(
+      errors,
+      'RUNTIME_RUN_ID_INVALID',
+      'Non-error manifests must contain a runtime UUID',
+      'manifest.json'
+    );
+  }
+  if (status === 'ERROR' && manifest.runtime_run_id !== null) {
+    addIssue(
+      errors,
+      'RUNTIME_RUN_ID_INVALID',
+      'ERROR manifests must have runtime_run_id: null',
       'manifest.json'
     );
   }
@@ -294,7 +410,16 @@ export async function verifyLiveFictionBundle(
 
   for (const [name, metadata] of artifactMetadata) {
     const entry = entryMap.get(name);
-    if (!entry || !entry.isFile()) continue;
+    if (!entry) {
+      addIssue(
+        errors,
+        'ARTIFACT_MISSING',
+        'Artifact is tracked by the manifest but missing from the run directory',
+        name
+      );
+      continue;
+    }
+    if (!entry.isFile()) continue;
     try {
       const content = await readFile(path.join(runDir, name));
       let valid = true;
@@ -413,7 +538,56 @@ export async function verifyLiveFictionBundle(
   }
 
   const stageModels = asRecord(manifest.stage_models);
-  if (manifestCalls && stageModels) {
+  if (!stageModels) {
+    addIssue(
+      errors,
+      'STAGE_MODELS_INVALID',
+      'manifest.stage_models must be an object',
+      'manifest.json'
+    );
+  } else {
+    for (const [stage, rawDescriptor] of Object.entries(stageModels)) {
+      if (!LIVE_STAGES.has(stage)) {
+        addIssue(
+          errors,
+          'STAGE_MODEL_STAGE_INVALID',
+          'Unknown live stage model descriptor: ' + stage,
+          'manifest.json'
+        );
+        continue;
+      }
+      const descriptor = asRecord(rawDescriptor);
+      if (
+        !descriptor ||
+        !LIVE_PROVIDERS.has(String(descriptor.provider)) ||
+        !nonEmptyString(descriptor.model) ||
+        !asRecord(descriptor.defaults)
+      ) {
+        addIssue(
+          errors,
+          'STAGE_MODEL_DESCRIPTOR_INVALID',
+          'Stage model descriptors require provider, non-empty model, and defaults object',
+          'manifest.json'
+        );
+      }
+    }
+
+    if (status && status !== 'ERROR') {
+      for (const stage of LIVE_STAGES) {
+        if (!hasOwn(stageModels, stage)) {
+          addIssue(
+            errors,
+            'STAGE_MODEL_MISSING',
+            'Non-error manifest is missing stage model descriptor ' + stage,
+            'manifest.json'
+          );
+        }
+      }
+    }
+  }
+
+  if (manifestCalls) {
+    const callStageCounts = new Map<string, number>();
     for (const rawCall of manifestCalls) {
       const call = asRecord(rawCall);
       if (!call || typeof call.stage !== 'string') {
@@ -425,10 +599,64 @@ export async function verifyLiveFictionBundle(
         );
         continue;
       }
+
+      callStageCounts.set(call.stage, (callStageCounts.get(call.stage) ?? 0) + 1);
+
+      if (!LIVE_STAGES.has(call.stage)) {
+        addIssue(
+          errors,
+          'CALL_STAGE_INVALID',
+          'Live evidence contains an unknown model-call stage: ' + call.stage,
+          'manifest.json'
+        );
+      }
+      if (!LIVE_PROVIDERS.has(String(call.provider))) {
+        addIssue(
+          errors,
+          'CALL_PROVIDER_INVALID',
+          'Call provider must be openai, gemini, or anthropic',
+          'manifest.json'
+        );
+      }
+      if (!nonEmptyString(call.model)) {
+        addIssue(
+          errors,
+          'CALL_MODEL_INVALID',
+          'Call model must be a non-empty string',
+          'manifest.json'
+        );
+      }
+      if (!isSha256(call.request_hash) || !isSha256(call.response_hash)) {
+        addIssue(
+          errors,
+          'CALL_HASH_INVALID',
+          'Call request_hash and response_hash must be SHA-256 values',
+          'manifest.json'
+        );
+      }
+      if (call.response_format !== 'text' && call.response_format !== 'json') {
+        addIssue(
+          errors,
+          'CALL_RESPONSE_FORMAT_INVALID',
+          'Call response_format must be text or json',
+          'manifest.json'
+        );
+      }
+      if (
+        typeof call.latency_ms !== 'number' ||
+        !Number.isFinite(call.latency_ms) ||
+        call.latency_ms < 0
+      ) {
+        addIssue(
+          errors,
+          'CALL_LATENCY_INVALID',
+          'Call latency_ms must be a non-negative finite number',
+          'manifest.json'
+        );
+      }
       if (
         !hasOwn(call, 'request_id') ||
-        (call.request_id !== null &&
-          (typeof call.request_id !== 'string' || call.request_id.length === 0))
+        (call.request_id !== null && !nonEmptyString(call.request_id))
       ) {
         addIssue(
           errors,
@@ -440,7 +668,7 @@ export async function verifyLiveFictionBundle(
       if (
         hasOwn(call, 'response_id') &&
         call.response_id !== null &&
-        (typeof call.response_id !== 'string' || call.response_id.length === 0)
+        !nonEmptyString(call.response_id)
       ) {
         addIssue(
           errors,
@@ -449,20 +677,20 @@ export async function verifyLiveFictionBundle(
           'manifest.json'
         );
       }
+      validateUsage(call.usage, errors);
+      validateSettings(call.settings, errors);
 
-      const descriptor = asRecord(stageModels[call.stage]);
-      if (!descriptor) {
+      const descriptor = stageModels ? asRecord(stageModels[call.stage]) : null;
+      if (stageModels && !descriptor) {
         addIssue(
           errors,
           'CALL_STAGE_MODEL_MISSING',
           'No stage model descriptor for call stage ' + call.stage,
           'manifest.json'
         );
-        continue;
-      }
-      if (
-        call.provider !== descriptor.provider ||
-        call.model !== descriptor.model
+      } else if (
+        descriptor &&
+        (call.provider !== descriptor.provider || call.model !== descriptor.model)
       ) {
         addIssue(
           errors,
@@ -470,6 +698,37 @@ export async function verifyLiveFictionBundle(
           'Call provider/model differs from the stage model descriptor',
           'manifest.json'
         );
+      }
+    }
+
+    if (status && status !== 'ERROR' && manifestCalls.length === 0) {
+      addIssue(
+        errors,
+        'CALL_EVIDENCE_MISSING',
+        'Non-error live evidence must contain model-call records',
+        'manifest.json'
+      );
+    }
+    if (status && status !== 'ERROR') {
+      if ((callStageCounts.get('compiler') ?? 0) < 1) {
+        addIssue(
+          errors,
+          'CALL_STAGE_REQUIRED',
+          status + ' evidence requires at least one compiler call',
+          'manifest.json'
+        );
+      }
+    }
+    if (status === 'OUTPUT') {
+      for (const stage of ['generator', 'validator']) {
+        if ((callStageCounts.get(stage) ?? 0) < 1) {
+          addIssue(
+            errors,
+            'CALL_STAGE_REQUIRED',
+            'OUTPUT evidence requires at least one ' + stage + ' call',
+            'manifest.json'
+          );
+        }
       }
     }
   }

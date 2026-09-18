@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { mkdir, open, readFile, readdir, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import {
@@ -99,7 +99,7 @@ export class LiveFictionBundleError extends Error {
         (manifest.failure?.message ?? 'unknown error') +
         '. Evidence bundle: ' +
         runDir,
-      { cause }
+      { cause: sanitizedFailureCause(cause) }
     );
     this.name = 'LiveFictionBundleError';
     this.runDir = runDir;
@@ -115,7 +115,9 @@ function jsonText(value: unknown): string {
   return JSON.stringify(value, null, 2) + '\n';
 }
 
-async function prepareRunDirectory(runDir: string): Promise<void> {
+async function prepareRunDirectory(
+  runDir: string
+): Promise<() => Promise<void>> {
   await mkdir(runDir, { recursive: true });
   const existing = await readdir(runDir);
   if (existing.length > 0) {
@@ -125,6 +127,46 @@ async function prepareRunDirectory(runDir: string): Promise<void> {
         '. Use a new run directory for every execution.'
     );
   }
+
+  const claimFile = path.join(runDir, '.linyuan-run-claim');
+  try {
+    const handle = await open(claimFile, 'wx');
+    await handle.close();
+  } catch (error) {
+    if (
+      error &&
+      typeof error === 'object' &&
+      'code' in error &&
+      error.code === 'EEXIST'
+    ) {
+      throw new Error(
+        'Live evidence run directory must be empty or unclaimed: ' +
+          runDir +
+          '. Use a new run directory for every execution.'
+      );
+    }
+    throw error;
+  }
+
+  const afterClaim = await readdir(runDir);
+  if (
+    afterClaim.length !== 1 ||
+    afterClaim[0] !== '.linyuan-run-claim'
+  ) {
+    await unlink(claimFile).catch(() => undefined);
+    throw new Error(
+      'Live evidence run directory changed while being claimed: ' +
+        runDir +
+        '. Use a new run directory for every execution.'
+    );
+  }
+
+  let released = false;
+  return async () => {
+    if (released) return;
+    released = true;
+    await unlink(claimFile);
+  };
 }
 
 async function writeTracked(
@@ -236,6 +278,13 @@ function failureFrom(error: unknown): LiveFailure {
   };
 }
 
+function sanitizedFailureCause(error: unknown): Error {
+  const failure = failureFrom(error);
+  const safe = new Error(failure.message);
+  safe.name = failure.name;
+  return safe;
+}
+
 function inputArtifact(input: ProductionFictionInput): Record<string, unknown> {
   const value: Record<string, unknown> = {
     request: input.request,
@@ -344,13 +393,17 @@ export async function runLiveFictionBundle(
   const commitSha = await detectGitCommit(repoRoot);
   const artifacts: Record<string, LiveArtifact> = {};
 
-  await prepareRunDirectory(runDir);
-  await writeTracked(
-    runDir,
-    'input.json',
-    jsonText(inputArtifact(input)),
-    artifacts
-  );
+  const releaseRunDirectoryClaim = await prepareRunDirectory(runDir);
+  try {
+    await writeTracked(
+      runDir,
+      'input.json',
+      jsonText(inputArtifact(input)),
+      artifacts
+    );
+  } finally {
+    await releaseRunDirectoryClaim();
+  }
 
   let clients: RuntimeModelClients | null = options.clients ?? null;
   let runtime: ModelBackedRuntime | null = null;
