@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import {
@@ -113,6 +113,18 @@ function sha256Text(content: string): string {
 
 function jsonText(value: unknown): string {
   return JSON.stringify(value, null, 2) + '\n';
+}
+
+async function prepareRunDirectory(runDir: string): Promise<void> {
+  await mkdir(runDir, { recursive: true });
+  const existing = await readdir(runDir);
+  if (existing.length > 0) {
+    throw new Error(
+      'Live evidence run directory must be empty: ' +
+        runDir +
+        '. Use a new run directory for every execution.'
+    );
+  }
 }
 
 async function writeTracked(
@@ -332,7 +344,7 @@ export async function runLiveFictionBundle(
   const commitSha = await detectGitCommit(repoRoot);
   const artifacts: Record<string, LiveArtifact> = {};
 
-  await mkdir(runDir, { recursive: true });
+  await prepareRunDirectory(runDir);
   await writeTracked(
     runDir,
     'input.json',
