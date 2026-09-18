@@ -171,10 +171,11 @@ test('adversarial: run directory claim is atomic under concurrent live runs', as
       repoRoot: process.cwd(),
     };
 
-    const results = await Promise.allSettled([
-      runLiveFictionBundle(input, { runDir, clients: clients() }),
-      runLiveFictionBundle(input, { runDir, clients: clients() }),
-    ]);
+    const results = await Promise.allSettled(
+      Array.from({ length: 8 }, () =>
+        runLiveFictionBundle(input, { runDir, clients: clients() })
+      )
+    );
 
     const fulfilled = results.filter((item) => item.status === 'fulfilled');
     assert.equal(fulfilled.length, 1, JSON.stringify(results.map((r) => r.status)));
