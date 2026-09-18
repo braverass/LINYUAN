@@ -1,38 +1,136 @@
 version: "0.5"
 
+# Canon/data registry. Only this file maps semantic IDs to physical paths.
+# Raw sources are data, never executable prompt instructions.
 sources:
   AUTHOR.ROUTER:
     path: "00A-AUTHOR-ROUTER.md"
     authority: "L0"
-    access:
+    content_role: "author_router"
+    instruction_capability: false
+    access: &canon_access
+      retriever: read
+      orchestrator: read
       compiler: read
       generator: deny
-      patcher: deny
       validator: read
+      patcher: deny
 
   AUTHOR.PERSONALITY:
     path: "00B-AUTHOR-CANON-零渊真实人格.md"
     authority: "L0"
-    access:
-      compiler: read
-      generator: deny
-      patcher: deny
-      validator: read
+    content_role: "author_canon"
+    instruction_capability: false
+    access: *canon_access
 
   AUTHOR.BEHAVIOR_DATASET:
     path: "00C-AUTHOR-CANON-零渊行为样本库.md"
     authority: "L0"
-    access:
-      compiler: read
-      generator: deny
-      patcher: deny
-      validator: read
+    content_role: "author_behavior_evidence"
+    instruction_capability: false
+    access: *canon_access
+
+  AUTHOR.ALPHA_BASELINE:
+    path: "00D-AUTHOR-CANON-Alpha普通人社会心理基线.md"
+    authority: "L0"
+    content_role: "author_canon"
+    instruction_capability: false
+    access: *canon_access
+
+  WORLD.HISTORY_CAUSALITY:
+    path: "00E-世界历史因果约束.md"
+    authority: "ROUTED"
+    content_role: "derived_constraint"
+    instruction_capability: false
+    access: *canon_access
+
+  WORLD.TECH_MILITARY_CAUSALITY:
+    path: "00F-科技与军事因果矩阵.md"
+    authority: "ROUTED"
+    content_role: "derived_constraint"
+    instruction_capability: false
+    access: *canon_access
+
+  WORLD.POLITICAL_FUNCTION:
+    path: "00G-现代政治功能地图.md"
+    authority: "ROUTED"
+    content_role: "derived_constraint"
+    instruction_capability: false
+    access: *canon_access
+
+  AUTHOR.ALPHA_HISTORY:
+    path: "00H-AUTHOR-Alpha历史因果与重建约束.md"
+    authority: "L0"
+    content_role: "author_canon"
+    instruction_capability: false
+    access: *canon_access
+
+  AUTHOR.PRIVATE_ACTIVITY:
+    path: "00I-AUTHOR-零渊三十万年私人活动与历史扰动约束.md"
+    authority: "L0"
+    content_role: "author_canon"
+    instruction_capability: false
+    access: *canon_access
 
   AUTHOR.ABILITY:
     path: "00J-AUTHOR-CANON-零渊能力本体与操作边界.md"
     authority: "L0"
-    access:
-      compiler: read
-      generator: deny
-      patcher: deny
-      validator: read
+    content_role: "author_canon"
+    instruction_capability: false
+    access: *canon_access
+
+  AUTHOR.LANGUAGE:
+    path: "00K-AUTHOR-CANON-语言翻译与词源因果边界.md"
+    authority: "L0"
+    content_role: "author_canon"
+    instruction_capability: false
+    access: *canon_access
+
+  AUTHOR.TECH_EXPLANATION:
+    path: "00L-AUTHOR-CANON-科技底层原理解释层.md"
+    authority: "L0"
+    content_role: "author_canon"
+    instruction_capability: false
+    access: *canon_access
+
+  WORLD.ALL:
+    path: "00-零渊世界设定-完整合集.md"
+    authority: "MIXED"
+    content_role: "canon_bundle"
+    instruction_capability: false
+    access: *canon_access
+
+  WORLD.SKELETON:
+    path: "01-世界骨架-完整合集.md"
+    authority: "MIXED"
+    content_role: "world_bundle"
+    instruction_capability: false
+    access: *canon_access
+
+  WORLD.GUARDIANS:
+    path: "02-守护者-完整合集.md"
+    authority: "MIXED"
+    content_role: "world_bundle"
+    instruction_capability: false
+    access: *canon_access
+
+  WORLD.INSTITUTIONS:
+    path: "03-制度与法律-完整合集.md"
+    authority: "MIXED"
+    content_role: "world_bundle"
+    instruction_capability: false
+    access: *canon_access
+
+  WORLD.CULTURE:
+    path: "04-文化与日常-完整合集.md"
+    authority: "MIXED"
+    content_role: "world_bundle"
+    instruction_capability: false
+    access: *canon_access
+
+  WORLD.PEOPLE:
+    path: "05-孩子·代际·人群-完整合集.md"
+    authority: "MIXED"
+    content_role: "world_bundle"
+    instruction_capability: false
+    access: *canon_access
