@@ -1,0 +1,39 @@
+name: Independent verifier baseline
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/independent-verifier.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  baseline-exact-sha:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 5991e938d13458cbd52f9020a6834ce138b590f4
+          fetch-depth: 1
+      - name: Assert exact target SHA
+        run: test "$(git rev-parse HEAD)" = "5991e938d13458cbd52f9020a6834ce138b590f4"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm install --ignore-scripts
+      - run: npm run ci
+
+  secret-presence:
+    runs-on: ubuntu-latest
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - name: Report presence only
+        shell: bash
+        run: |
+          test -n "$OPENAI_API_KEY" && echo "OPENAI_API_KEY=present" || echo "OPENAI_API_KEY=absent"
+          test -n "$GEMINI_API_KEY" && echo "GEMINI_API_KEY=present" || echo "GEMINI_API_KEY=absent"
+          test -n "$ANTHROPIC_API_KEY" && echo "ANTHROPIC_API_KEY=present" || echo "ANTHROPIC_API_KEY=absent"
