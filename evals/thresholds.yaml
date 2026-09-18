@@ -1,0 +1,16 @@
+# Spec 0.6 acceptance thresholds.
+# These are contract targets, not claims about current model quality.
+minimum:
+  retrieval_recall: 0.98
+  constraint_fidelity: 0.95
+  need_context_precision: 0.90
+  need_context_recall: 0.95
+  behavioral_diversity: 0.75
+  patch_locality: 1.0
+  metamorphic_invariance_rate: 1.0
+
+maximum:
+  forbidden_inference_rate: 0.02
+  ir_overconstraint_rate: 0.05
+  validator_false_positive_rate: 0.05
+  validator_false_negative_rate: 0.05
