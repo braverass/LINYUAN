@@ -34,7 +34,6 @@ const context: ActiveContext = {
     nonverbal_behavior: true,
     emotional_expression: true,
   },
-  scene_state: {},
 };
 
 test('Generator payload accepts only clean runtime origins', () => {
