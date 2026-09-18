@@ -1,6 +1,10 @@
 import { readFile } from 'node:fs/promises';
 
 import { assertBaselinePair } from './baseline-integrity';
+import {
+  assertBaselineProvenance,
+  buildCurrentBaselineProvenance,
+} from './baseline-provenance';
 import type { RealEvalManifest } from './run-manifest';
 import type { EvalSuiteReport } from './types';
 
@@ -21,6 +25,13 @@ const manifest = JSON.parse(
 
 assertBaselinePair(report, manifest);
 
+const current = await buildCurrentBaselineProvenance();
+assertBaselineProvenance(
+  manifest,
+  current,
+  process.env.LINYUAN_BASELINE_COMMIT
+);
+
 console.log(
   JSON.stringify(
     {
@@ -28,6 +39,8 @@ console.log(
       report_hash: manifest.report_hash,
       commit_sha: manifest.commit_sha,
       case_set_hash: manifest.case_set_hash,
+      prompt_template_hashes_verified: true,
+      source_hashes_verified: true,
     },
     null,
     2

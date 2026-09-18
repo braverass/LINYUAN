@@ -128,6 +128,24 @@ A real run can emit a separate manifest containing:
 - every registered Canon source hash;
 - every real model call record.
 
+## Baseline integrity
+
+Spec 0.7.1 binds `report.json` to `manifest.json` with `report_hash`.
+
+Spec 0.7.2 also verifies the manifest against the repository state used to
+interpret the baseline. The verifier recomputes:
+
+- the loaded evaluation case-set hash;
+- every model prompt-template hash;
+- every registered Canon source hash.
+
+A manifest with `commit_sha: UNKNOWN` is rejected. An exact experiment commit
+can also be pinned with `LINYUAN_BASELINE_COMMIT`.
+
+This distinction matters because a perfectly paired report and manifest can
+still be stale after cases, prompts, or Canon change. Two matching JSON files
+are not a time machine.
+
 ## Commands
 
 Configure one model for every stage:
@@ -160,7 +178,7 @@ npm run eval:real
 
 Add `-- --enforce` only when the run is intended to gate against the frozen Spec 0.6 thresholds.
 
-Verify that a saved report and manifest belong to the same run:
+Verify the saved pair and its current provenance:
 
 ```bash
 npm run eval:verify-baseline -- \
@@ -168,7 +186,13 @@ npm run eval:verify-baseline -- \
   evals/baselines/manifest.json
 ```
 
-The verifier recomputes the stable hash of the parsed report and compares it
-with `manifest.report_hash`.
+To require a specific experiment commit:
+
+```bash
+LINYUAN_BASELINE_COMMIT=<experiment-commit-sha> \
+npm run eval:verify-baseline -- \
+  evals/baselines/report.json \
+  evals/baselines/manifest.json
+```
 
 CI never requires external API keys. CI tests the boundary and wiring with deterministic local doubles; real model baselines are explicit experiments.
