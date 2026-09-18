@@ -1033,3 +1033,105 @@ test('candidate does not receive evaluator gold and evaluator does not backfill 
     false
   );
 });
+
+
+test('adversarial: OUTPUT missing validator stage must not verify', async () => {
+  const runDir = await createOutputBundle({
+    calls: [call('compiler'), call('generator')],
+  });
+  try {
+    const report = await verifyLiveFictionBundle(runDir);
+    assert.equal(
+      report.ok,
+      false,
+      'Verifier accepted OUTPUT evidence without validator call'
+    );
+    assert.equal(
+      report.errors.some((issue) => issue.code === 'CALL_SEQUENCE_INVALID'),
+      true
+    );
+  } finally {
+    await rm(runDir, { recursive: true, force: true });
+  }
+});
+
+test('adversarial: whitespace-only response_id must not verify', async () => {
+  const runDir = await createOutputBundle({
+    requestIdMutator(calls) {
+      calls[0]!.response_id = '   ';
+    },
+  });
+  try {
+    const report = await verifyLiveFictionBundle(runDir);
+    assert.equal(report.ok, false);
+    assert.equal(
+      report.errors.some((issue) => issue.code === 'CALL_RESPONSE_ID_INVALID'),
+      true
+    );
+  } finally {
+    await rm(runDir, { recursive: true, force: true });
+  }
+});
+
+test('unsupported seed settings are rejected instead of being recorded but omitted for OpenAI/Anthropic', async () => {
+  const originalFetch = globalThis.fetch;
+  let fetchCalls = 0;
+  globalThis.fetch = async () => {
+    fetchCalls += 1;
+    return new Response('{}', {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  };
+
+  try {
+    for (const provider of ['openai', 'anthropic'] as const) {
+      const client = createModelClient({
+        provider,
+        model: 'fixture-model',
+        apiKey: 'fixture-key',
+        baseUrl: 'https://' + provider + '.invalid',
+        defaults: { seed: 42 },
+      });
+      await assert.rejects(
+        () =>
+          client.complete({
+            stage: 'generator',
+            prompt: '{}',
+            responseFormat: 'json',
+          }),
+        /does not support seed/
+      );
+    }
+    assert.equal(fetchCalls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('2xx provider response with invalid JSON is rejected', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response('not-json', {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+  try {
+    const client = createModelClient({
+      provider: 'openai',
+      model: 'fixture-model',
+      apiKey: 'fixture-key',
+      baseUrl: 'https://openai.invalid/v1',
+    });
+    await assert.rejects(() =>
+      client.complete({
+        stage: 'compiler',
+        prompt: '{}',
+        responseFormat: 'json',
+      })
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
