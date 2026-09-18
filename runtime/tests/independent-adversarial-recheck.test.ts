@@ -479,3 +479,211 @@ test('independent provider mock: unsupported seed is rejected for OpenAI and Ant
     );
   }
 });
+
+
+function specializedClient(mode: 'NEED_CONTEXT' | 'CONFLICT' | 'ERROR'): ModelClient {
+  return {
+    provider: 'openai',
+    model: 'fixture-model',
+    defaults: {},
+    async complete(request: ModelRequest): Promise<ModelResponse> {
+      if (request.stage === 'compiler') {
+        if (mode === 'NEED_CONTEXT') {
+          return {
+            provider: 'openai',
+            model: 'fixture-model',
+            latencyMs: 1,
+            requestId: 'req-compiler',
+            responseId: 'resp-compiler',
+            text: JSON.stringify({
+              status: 'NEED_CONTEXT',
+              missing: [{ type: 'fixture', question: 'need fixture context' }],
+            }),
+          };
+        }
+        if (mode === 'CONFLICT') {
+          return {
+            provider: 'openai',
+            model: 'fixture-model',
+            latencyMs: 1,
+            requestId: 'req-compiler',
+            responseId: 'resp-compiler',
+            text: JSON.stringify({
+              status: 'CONFLICT',
+              conflict: 'fixture conflict',
+            }),
+          };
+        }
+        return {
+          provider: 'openai',
+          model: 'fixture-model',
+          latencyMs: 1,
+          requestId: 'req-compiler',
+          responseId: 'resp-compiler',
+          text: JSON.stringify({
+            status: 'READY',
+            activeContext: {
+              version: '0.5',
+              facts: [],
+              constraints: [],
+              unknowns: [],
+              inference_barriers: [],
+              open_dimensions: {
+                action_selection: true,
+                dialogue_realization: true,
+                pacing: true,
+                nonverbal_behavior: true,
+                emotional_expression: true,
+              },
+            },
+            provenance: {},
+          }),
+        };
+      }
+      if (request.stage === 'generator' && mode === 'ERROR') {
+        throw new Error('fixture provider failure');
+      }
+      throw new Error('unexpected stage ' + request.stage);
+    },
+  };
+}
+
+async function makeSpecialBundle(
+  runDir: string,
+  mode: 'NEED_CONTEXT' | 'CONFLICT' | 'ERROR'
+): Promise<void> {
+  const model = specializedClient(mode);
+  const modelClients: RuntimeModelClients = {
+    retrievalPlanner: model,
+    compiler: model,
+    generator: model,
+    validator: model,
+    patcher: model,
+  };
+  try {
+    await runLiveFictionBundle(
+      {
+        request: 'fixture special request',
+        sceneState: {},
+        semanticIds: ['AUTHOR.PERSONALITY'],
+        maxContextRounds: 1,
+        system: 'fixture system',
+        repoRoot: process.cwd(),
+      },
+      { runDir, clients: modelClients }
+    );
+  } catch (error) {
+    if (mode !== 'ERROR') throw error;
+  }
+}
+
+async function addTrackedText(
+  runDir: string,
+  name: string,
+  content: string
+): Promise<void> {
+  const manifest = await readJson(path.join(runDir, 'manifest.json'));
+  await writeFile(path.join(runDir, name), content, 'utf8');
+  manifest.artifacts[name] = {
+    file: name,
+    bytes: Buffer.byteLength(content, 'utf8'),
+    sha256: createHash('sha256').update(content, 'utf8').digest('hex'),
+  };
+  await saveManifest(runDir, manifest);
+}
+
+test('independent status closure: ERROR rejects tracked output.md', async () => {
+  const runDir = await mkdtemp(path.join(os.tmpdir(), 'linyuan-independent-error-layout-'));
+  try {
+    await makeSpecialBundle(runDir, 'ERROR');
+    await addTrackedText(runDir, 'output.md', 'stale output\n');
+    const report = await verifyLiveFictionBundle(runDir);
+    assert.equal(report.status, 'ERROR');
+    assert.equal(report.ok, false);
+    assert.equal(
+      report.errors.some((issue) => issue.code === 'TRACKED_ARTIFACT_UNEXPECTED'),
+      true
+    );
+  } finally {
+    await rm(runDir, { recursive: true, force: true });
+  }
+});
+
+test('independent status closure: NEED_CONTEXT rejects tracked failure.json', async () => {
+  const runDir = await mkdtemp(path.join(os.tmpdir(), 'linyuan-independent-need-layout-'));
+  try {
+    await makeSpecialBundle(runDir, 'NEED_CONTEXT');
+    await addTrackedText(
+      runDir,
+      'failure.json',
+      JSON.stringify({ name: 'Error', message: 'stale failure' }, null, 2) + '\n'
+    );
+    const report = await verifyLiveFictionBundle(runDir);
+    assert.equal(report.status, 'NEED_CONTEXT');
+    assert.equal(report.ok, false);
+    assert.equal(
+      report.errors.some((issue) => issue.code === 'TRACKED_ARTIFACT_UNEXPECTED'),
+      true
+    );
+  } finally {
+    await rm(runDir, { recursive: true, force: true });
+  }
+});
+
+test('independent status closure: CONFLICT rejects tracked output.md', async () => {
+  const runDir = await mkdtemp(path.join(os.tmpdir(), 'linyuan-independent-conflict-layout-'));
+  try {
+    await makeSpecialBundle(runDir, 'CONFLICT');
+    await addTrackedText(runDir, 'output.md', 'stale output\n');
+    const report = await verifyLiveFictionBundle(runDir);
+    assert.equal(report.status, 'CONFLICT');
+    assert.equal(report.ok, false);
+    assert.equal(
+      report.errors.some((issue) => issue.code === 'TRACKED_ARTIFACT_UNEXPECTED'),
+      true
+    );
+  } finally {
+    await rm(runDir, { recursive: true, force: true });
+  }
+});
+
+test('independent identity validation: whitespace-only response_id is rejected', async () => {
+  const runDir = await mkdtemp(path.join(os.tmpdir(), 'linyuan-independent-response-id-'));
+  try {
+    await makeBundle(runDir);
+    const manifest = await readJson(path.join(runDir, 'manifest.json'));
+    const calls = await readJson(path.join(runDir, 'calls.json'));
+    calls[0].response_id = '   ';
+    manifest.calls = JSON.parse(JSON.stringify(calls));
+    await rewriteTrackedJson(runDir, 'calls.json', calls, manifest);
+    await saveManifest(runDir, manifest);
+    const report = await verifyLiveFictionBundle(runDir);
+    assert.equal(report.ok, false, 'whitespace response_id must fail');
+  } finally {
+    await rm(runDir, { recursive: true, force: true });
+  }
+});
+
+test('documented identity boundary: swapping syntactically valid request_id and response_id is not detectable offline', async () => {
+  const runDir = await mkdtemp(path.join(os.tmpdir(), 'linyuan-independent-id-swap-'));
+  try {
+    await makeBundle(runDir);
+    const manifest = await readJson(path.join(runDir, 'manifest.json'));
+    const calls = await readJson(path.join(runDir, 'calls.json'));
+    const originalRequestId = calls[0].request_id;
+    calls[0].request_id = calls[0].response_id;
+    calls[0].response_id = originalRequestId;
+    manifest.calls = JSON.parse(JSON.stringify(calls));
+    await rewriteTrackedJson(runDir, 'calls.json', calls, manifest);
+    await saveManifest(runDir, manifest);
+
+    const report = await verifyLiveFictionBundle(runDir);
+    assert.equal(
+      report.ok,
+      true,
+      'offline verifier currently checks ID shape/consistency, not provider-native ID namespace semantics'
+    );
+  } finally {
+    await rm(runDir, { recursive: true, force: true });
+  }
+});
