@@ -28,6 +28,38 @@ function cleanBaseUrl(value: string): string {
   return value.replace(/\/+$/, '');
 }
 
+function sanitizeProviderErrorDetail(
+  message: string,
+  headers: Record<string, string>
+): string {
+  const secrets = new Set<string>();
+  for (const [key, value] of Object.entries(process.env)) {
+    if (
+      /API_KEY|TOKEN|SECRET|PASSWORD/i.test(key) &&
+      typeof value === 'string' &&
+      value.length >= 4
+    ) {
+      secrets.add(value);
+    }
+  }
+  for (const [key, value] of Object.entries(headers)) {
+    if (/authorization|api-key/i.test(key) && value.length >= 4) {
+      secrets.add(value);
+      const bearer = /^Bearer\s+(.+)$/i.exec(value);
+      if (bearer?.[1]) secrets.add(bearer[1]);
+    }
+  }
+
+  let sanitized = message;
+  for (const secret of [...secrets].sort((a, b) => b.length - a.length)) {
+    sanitized = sanitized.split(secret).join('[REDACTED]');
+  }
+  return sanitized.replace(
+    /Bearer\s+[A-Za-z0-9._~+\/=:-]+/gi,
+    'Bearer [REDACTED]'
+  );
+}
+
 async function postJson(
   url: string,
   headers: Record<string, string>,
@@ -53,7 +85,7 @@ async function postJson(
         ')' +
         (requestId ? ' [request-id ' + requestId + ']' : '') +
         ': ' +
-        responseText.slice(0, 1200)
+        sanitizeProviderErrorDetail(responseText.slice(0, 1200), headers)
     );
   }
   return {
