@@ -1,0 +1,38 @@
+version: "0.5"
+
+sources:
+  AUTHOR.ROUTER:
+    path: "00A-AUTHOR-ROUTER.md"
+    authority: "L0"
+    access:
+      compiler: read
+      generator: deny
+      patcher: deny
+      validator: read
+
+  AUTHOR.PERSONALITY:
+    path: "00B-AUTHOR-CANON-零渊真实人格.md"
+    authority: "L0"
+    access:
+      compiler: read
+      generator: deny
+      patcher: deny
+      validator: read
+
+  AUTHOR.BEHAVIOR_DATASET:
+    path: "00C-AUTHOR-CANON-零渊行为样本库.md"
+    authority: "L0"
+    access:
+      compiler: read
+      generator: deny
+      patcher: deny
+      validator: read
+
+  AUTHOR.ABILITY:
+    path: "00J-AUTHOR-CANON-零渊能力本体与操作边界.md"
+    authority: "L0"
+    access:
+      compiler: read
+      generator: deny
+      patcher: deny
+      validator: read
