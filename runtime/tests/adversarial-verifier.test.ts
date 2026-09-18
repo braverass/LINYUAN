@@ -185,10 +185,13 @@ test('adversarial: run directory claim is atomic under concurrent live runs', as
 
 test('adversarial: Anthropic Messages API uses x-api-key authentication', async () => {
   const originalFetch = globalThis.fetch;
-  let capturedHeaders: Headers | null = null;
+  let capturedXApiKey: string | null = null;
+  let capturedAuthorization: string | null = null;
 
   globalThis.fetch = async (_input, init) => {
-    capturedHeaders = new Headers(init?.headers);
+    const headers = new Headers(init?.headers);
+    capturedXApiKey = headers.get('x-api-key');
+    capturedAuthorization = headers.get('authorization');
     return new Response(
       JSON.stringify({
         id: 'msg_fixture',
@@ -216,8 +219,8 @@ test('adversarial: Anthropic Messages API uses x-api-key authentication', async 
       responseFormat: 'json',
     });
 
-    assert.equal(capturedHeaders?.get('x-api-key'), 'anthropic-secret');
-    assert.equal(capturedHeaders?.has('authorization'), false);
+    assert.equal(capturedXApiKey, 'anthropic-secret');
+    assert.equal(capturedAuthorization, null);
   } finally {
     globalThis.fetch = originalFetch;
   }
