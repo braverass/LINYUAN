@@ -1,0 +1,99 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+title: "LINYUAN Spec 0.6 Eval Case"
+type: object
+additionalProperties: false
+required:
+  - version
+  - id
+  - category
+  - description
+  - request
+  - scene_state
+  - required_sources
+  - requirements
+  - forbidden_inferences
+  - forbidden_overconstraints
+  - expected_need_context
+  - behavioral_diversity
+  - validator
+  - metamorphic_group
+  - synthetic_canon
+properties:
+  version:
+    const: "0.6"
+  id:
+    type: string
+    minLength: 1
+  category:
+    enum:
+      - personality
+      - behavior
+      - knowledge
+      - ability
+      - continuity
+      - adversarial
+  description:
+    type: string
+  request:
+    type: string
+  scene_state:
+    type: object
+  required_sources:
+    type: array
+    uniqueItems: true
+    items: { type: string }
+  requirements:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      required: [id, kind, description]
+      properties:
+        id: { type: string }
+        kind:
+          enum: [fact, constraint, inference_barrier]
+        description: { type: string }
+  forbidden_inferences:
+    type: array
+    items:
+      $ref: "#/$defs/forbidden"
+  forbidden_overconstraints:
+    type: array
+    items:
+      $ref: "#/$defs/forbidden"
+  expected_need_context:
+    type: array
+    uniqueItems: true
+    items: { type: string }
+  behavioral_diversity:
+    type: object
+    additionalProperties: false
+    required: [sample_count, minimum_unique_signatures]
+    properties:
+      sample_count: { type: integer, minimum: 0 }
+      minimum_unique_signatures: { type: integer, minimum: 0 }
+  validator:
+    type: object
+    additionalProperties: false
+    required: [gold_violations, gold_non_violations]
+    properties:
+      gold_violations:
+        type: array
+        uniqueItems: true
+        items: { type: string }
+      gold_non_violations:
+        type: array
+        uniqueItems: true
+        items: { type: string }
+  metamorphic_group:
+    type: [string, "null"]
+  synthetic_canon:
+    type: [string, "null"]
+$defs:
+  forbidden:
+    type: object
+    additionalProperties: false
+    required: [id, description]
+    properties:
+      id: { type: string }
+      description: { type: string }
