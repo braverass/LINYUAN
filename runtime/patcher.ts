@@ -80,12 +80,17 @@ function sentenceRanges(text: string, baseOffset: number): Range[] {
   let start = 0;
 
   for (let i = 0; i < text.length; i += 1) {
-    if (!terminal.has(text[i])) {
+    const char = text[i];
+    if (char === undefined || !terminal.has(char)) {
       continue;
     }
 
     let end = i + 1;
-    while (end < text.length && closers.has(text[end])) {
+    while (end < text.length) {
+      const closer = text[end];
+      if (closer === undefined || !closers.has(closer)) {
+        break;
+      }
       end += 1;
     }
 
