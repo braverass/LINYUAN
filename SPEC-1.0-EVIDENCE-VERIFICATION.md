@@ -4,15 +4,17 @@ Spec 0.9 records auditable live-run evidence. Spec 1.0 makes that evidence indep
 
 ## Threat model
 
-The verifier is designed to catch accidental corruption, stale files, partial copies, mismatched manifests, and post-run edits to tracked artifacts.
+The verifier is designed to catch accidental corruption, stale files, partial copies, mismatched manifests, post-run edits to tracked artifacts, and internally inconsistent claims about one recorded execution.
 
 It deliberately does **not** claim cryptographic authenticity against an attacker who can rewrite both every artifact and the manifest. It also does not prove that an external model provider actually served a request. Provider contact is established by the real execution environment and preserved workflow/run provenance, not by pretending a SHA-256 digest is a witness.
 
+A syntactically valid `commit_sha` is therefore not, by itself, proof that the bundle was produced by that repository commit. That binding must come from external checkout/workflow provenance.
+
 ## Single-use run directories
 
-`fiction:live` now refuses to write into a non-empty run directory.
+`fiction:live` refuses to write into a non-empty run directory and claims a new run directory atomically.
 
-This closes a concrete Spec 0.9 hole: reusing a directory could otherwise leave an old `output.md` or `trace.json` beside a new failure manifest. A live evidence directory is now one execution, once.
+This prevents stale files from a previous run surviving beside a new manifest and prevents concurrent live runs from sharing one evidence directory.
 
 ## Verifier
 
@@ -31,13 +33,20 @@ npm run fiction:verify -- \
 The verifier checks:
 
 - `manifest.json` exists, parses, and uses the supported live-manifest version.
+- Bundle identity fields have the expected UUID / concrete-commit shapes.
 - The directory contains only `manifest.json` plus the artifacts declared by the manifest.
 - Every tracked artifact is a regular top-level file.
 - Every tracked artifact has the exact declared byte count and SHA-256.
 - `OUTPUT`, `NEED_CONTEXT`, `CONFLICT`, and `ERROR` have the correct required and forbidden artifact sets.
 - `input.json` hashes and execution options agree with `manifest.input`.
-- `calls.json` exactly matches `manifest.calls`, recorded calls agree with their stage model descriptors, and provider identity fields are type-checked.
+- Successful inputs use a valid scene object, semantic-ID shape, and positive `max_context_rounds`.
+- When a custom `system_override` is recorded for a successful run, its content is bound to `runtime_contract.system_hash`.
+- `calls.json` exactly matches `manifest.calls`.
+- Call hashes, latency, usage, settings, provider/model identity, and request/response identifiers have valid shapes.
+- Recorded call settings agree with the configured stage-model defaults used by the live runtime.
+- `OUTPUT` call records preserve runtime causality: compiler before generation, final generation before validation, and patching only after validation.
 - Successful/non-error `trace.json` agrees with the runtime run ID and retrieval evidence in the manifest.
+- Generator call counts and patcher scope counts in the trace agree with recorded model calls.
 - `result.json.status` agrees with the manifest status.
 - For `OUTPUT`, the runtime output reconstructed from `output.md` agrees with `result.output_hash`.
 - For `ERROR`, `failure.json` exactly matches `manifest.failure`.
@@ -46,19 +55,23 @@ Exit code is `0` only when every check passes; otherwise it is `1`.
 
 ## Provider call identity
 
-New live call records distinguish two provider-native identifiers when available:
+Live call records distinguish two provider-native identifiers when available:
 
-- `request_id` is the HTTP/API request identifier returned by the provider response headers, such as OpenAI `x-request-id` or Claude `request-id`.
+- `request_id` is the HTTP/API request identifier returned by provider response headers, such as OpenAI `x-request-id` or Claude `request-id`.
 - `response_id` is the provider response object identifier from the JSON payload, such as an OpenAI response ID, Gemini `responseId`, or Claude message ID.
 
-The two identifiers are intentionally not conflated. Older 0.9 bundles without `response_id` remain valid because the verifier treats the manifest as recorded evidence and does not require this additive field.
+The two identifiers are intentionally not conflated. Older 0.9 bundles without `response_id` remain valid when the rest of the preserved evidence satisfies the current verifier.
 
 ## CI and live workflow
 
 Normal CI runs the verifier tests with fixture model clients and does not spend provider credits.
 
-The manual Spec 0.9 live workflow now runs `fiction:verify` after the production chain and before artifact upload. The verification step uses `if: always()`, so a structured `ERROR` bundle is checked too. If execution dies before a bundle exists, verification fails rather than manufacturing evidence.
+The manual Spec 0.9 live workflow runs `fiction:verify` after the production chain and before artifact upload. The verification step uses `if: always()`, so a structured `ERROR` bundle is checked too. If execution dies before a bundle exists, verification fails rather than manufacturing evidence.
 
 ## Compatibility
 
-The evidence manifest remains version `0.9`. Spec 1.0 adds validation semantics around that format rather than silently changing its schema. Existing preserved 0.9 bundles can therefore be checked by the 1.0 verifier.
+The evidence manifest remains version `0.9`. Spec 1.0 adds validation semantics around that format rather than changing the serialized version.
+
+Preserved 0.9 bundles without the additive `response_id` field remain compatible when they contain concrete Git commit provenance and otherwise satisfy the closed-bundle invariants.
+
+Historical 0.9 bundles whose producer recorded `commit_sha: "UNKNOWN"` are no longer accepted by the hardened verifier. That is an intentional provenance tightening, so compatibility is not unconditional across every artifact an older producer could emit.
