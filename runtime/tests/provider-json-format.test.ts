@@ -5,10 +5,12 @@ import { createModelClient } from '../model/providers';
 
 test('OpenAI Responses requests JSON mode for structured runtime stages', async () => {
   const originalFetch = globalThis.fetch;
-  let capturedBody: Record<string, unknown> | null = null;
+  const capturedBodies: Record<string, unknown>[] = [];
 
   globalThis.fetch = async (_input, init) => {
-    capturedBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    capturedBodies.push(
+      JSON.parse(String(init?.body)) as Record<string, unknown>
+    );
     return new Response(
       JSON.stringify({
         id: 'resp_fixture',
@@ -41,6 +43,7 @@ test('OpenAI Responses requests JSON mode for structured runtime stages', async 
       responseFormat: 'json',
     });
 
+    const capturedBody = capturedBodies[0];
     assert.ok(capturedBody);
     assert.deepEqual(capturedBody.text, {
       format: { type: 'json_object' },
