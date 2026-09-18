@@ -46,3 +46,16 @@ Normal push/PR CI never spends external model credits. It tests the same live bu
 - `1`: configuration, provider, parsing, runtime, or filesystem failure
 
 A green normal CI run proves the live E2E machinery is wired correctly. It does not claim that a real provider was contacted. Only a preserved live evidence bundle can support that claim.
+
+
+## Verification in Spec 1.0
+
+Live run directories are now single-use evidence containers. The runtime refuses to write into a non-empty run directory, preventing stale files from a previous run from surviving beside a new manifest.
+
+After a bundle is produced, verify it independently:
+
+```bash
+npm run fiction:verify -- --run-dir runs/live/RUN-0001
+```
+
+The verifier checks the closed file set, byte counts, SHA-256 values, status-specific layout, and cross-file consistency between `input.json`, `trace.json`, `calls.json`, `result.json` / `failure.json`, `output.md`, and `manifest.json`.
