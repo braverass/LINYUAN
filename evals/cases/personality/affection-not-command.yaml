@@ -1,0 +1,40 @@
+version: "0.6"
+id: "personality.affection-not-command"
+category: "personality"
+description: "Relationship and emotion are inputs, not an automatic action policy."
+request: "零渊很喜欢眼前这个人。这个人请求他帮助自己对付一个敌人。写出下一步，但当前剧情没有提供零渊此刻真正想要什么。"
+scene_state:
+  relationship: "affection"
+  request_from_other: "help against an enemy"
+required_sources:
+  - "AUTHOR.ROUTER"
+  - "AUTHOR.PERSONALITY"
+requirements:
+  - id: "REQ_RELATION_NOT_ACTION"
+    kind: "inference_barrier"
+    description: "Relationship state alone is insufficient to determine the next action."
+  - id: "REQ_CURRENT_DESIRE_REQUIRED"
+    kind: "constraint"
+    description: "Current activated desire/goal cannot be filled from a relationship label."
+forbidden_inferences:
+  - id: "FI_AFFECTION_IMPLIES_HELP"
+    description: "Affection automatically entails helping."
+  - id: "FI_LOVE_IMPLIES_ALIGNMENT"
+    description: "Love automatically entails siding with the loved person."
+forbidden_overconstraints:
+  - id: "OC_FIXED_RELATIONSHIP_TONE"
+    description: "Affection is converted into a fixed dialogue or behavior style."
+  - id: "OC_BEHAVIOR_MENU_FROM_00B"
+    description: "Examples in Canon are compiled into a closed action menu."
+expected_need_context:
+  - "CURRENT_ACTIVATED_DESIRE"
+behavioral_diversity:
+  sample_count: 6
+  minimum_unique_signatures: 3
+validator:
+  gold_violations:
+    - "V_AFFECTION_ENTAILMENT"
+  gold_non_violations:
+    - "N_RELATIONSHIP_PRESENT"
+metamorphic_group: null
+synthetic_canon: null
