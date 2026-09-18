@@ -1,7 +1,7 @@
 {
   "name": "linyuan-canon-runtime",
   "private": true,
-  "version": "0.8.0",
+  "version": "0.9.0",
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -11,11 +11,13 @@
     "lint:registry": "tsx runtime/ci/lint-registry.ts",
     "eval": "tsx evals/runner.ts",
     "eval:smoke": "tsx evals/runner.ts --enforce",
-    "ci": "npm run typecheck && npm test && npm run lint:registry && npm run eval:smoke && npm run fiction:help",
+    "ci": "npm run typecheck && npm test && npm run lint:registry && npm run eval:smoke && npm run fiction:help && npm run fiction:live:help",
     "eval:real": "tsx evals/real-runner.ts",
     "eval:verify-baseline": "tsx evals/verify-baseline.ts",
     "fiction": "tsx runtime/fiction-cli.ts",
-    "fiction:help": "tsx runtime/fiction-cli.ts --help"
+    "fiction:help": "tsx runtime/fiction-cli.ts --help",
+    "fiction:live": "tsx runtime/live-fiction-cli.ts",
+    "fiction:live:help": "tsx runtime/live-fiction-cli.ts --help"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

@@ -1,0 +1,87 @@
+name: Spec 0.9 Live Fiction E2E
+
+on:
+  workflow_dispatch:
+    inputs:
+      provider:
+        description: Model provider
+        required: true
+        type: choice
+        options:
+          - openai
+          - gemini
+          - anthropic
+      model:
+        description: Exact provider model ID
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  live-fiction-e2e:
+    runs-on: ubuntu-latest
+    env:
+      LINYUAN_MODEL_PROVIDER: ${{ inputs.provider }}
+      LINYUAN_MODEL_ID: ${{ inputs.model }}
+      LINYUAN_MODEL_MAX_OUTPUT_TOKENS: "2500"
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - run: npm install --ignore-scripts
+
+      - name: Verify selected provider secret exists
+        shell: bash
+        run: |
+          case "$LINYUAN_MODEL_PROVIDER" in
+            openai)
+              test -n "$OPENAI_API_KEY" || { echo "OPENAI_API_KEY secret is not configured"; exit 1; }
+              ;;
+            gemini)
+              test -n "$GEMINI_API_KEY" || { echo "GEMINI_API_KEY secret is not configured"; exit 1; }
+              ;;
+            anthropic)
+              test -n "$ANTHROPIC_API_KEY" || { echo "ANTHROPIC_API_KEY secret is not configured"; exit 1; }
+              ;;
+          esac
+
+      - name: Prepare fixed live smoke input
+        shell: bash
+        run: |
+          cat > live-request.txt <<'EOF'
+          写一个短场景：零渊第一次进入庄园镇。保持正文简短，只写可由当前 Canon 支持的内容。
+          EOF
+          cat > live-scene.json <<'EOF'
+          {
+            "location": "庄园镇",
+            "time": "night",
+            "purpose": "spec-0.9-live-smoke"
+          }
+          EOF
+
+      - name: Run full live fiction pipeline
+        run: >
+          npm run fiction:live --
+          --request-file live-request.txt
+          --scene-file live-scene.json
+          --max-context-rounds 2
+          --run-dir runs/live/github-${{ github.run_id }}-${{ github.run_attempt }}
+          --json
+
+      - name: Upload live evidence bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: spec-0.9-live-${{ github.run_id }}-${{ github.run_attempt }}
+          path: runs/live/
+          if-no-files-found: ignore
+          retention-days: 14
