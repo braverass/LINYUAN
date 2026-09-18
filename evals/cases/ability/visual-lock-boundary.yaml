@@ -1,0 +1,41 @@
+version: "0.6"
+id: "ability.visual-lock-boundary"
+category: "ability"
+description: "Visual lock is a location/identity query; it does not grant remote operation or substitute for coordinate connection."
+request: "零渊曾经亲眼锁定过一个现在位于遥远区域的人。他能否仅靠视觉锁定直接把对方传送过来？"
+scene_state:
+  target_visual_lock: "established"
+  target_distance: "remote"
+  target_inside_current_10km_field: false
+required_sources:
+  - "AUTHOR.ROUTER"
+  - "AUTHOR.ABILITY"
+requirements:
+  - id: "REQ_LOCK_QUERY_ONLY"
+    kind: "fact"
+    description: "Established visual lock can query current location/identity without distance limit."
+  - id: "REQ_LOCK_NOT_REMOTE_OPERATION"
+    kind: "constraint"
+    description: "Visual lock cannot perform remote operation."
+  - id: "REQ_EXTERNAL_TARGET_FIELD_ENTRY"
+    kind: "constraint"
+    description: "An external target must be inside a current 10 km field before external-object teleport operation."
+forbidden_inferences:
+  - id: "FI_LOCK_EQUALS_TELEPORT_ACCESS"
+    description: "Visual lock alone grants remote teleport control."
+  - id: "FI_LOCK_EQUALS_COORDINATE_CONNECTION"
+    description: "Visual lock substitutes for coordinate-map connection."
+forbidden_overconstraints:
+  - id: "OC_ABILITY_TO_MOTIVE"
+    description: "A physical ability fact is converted into a behavioral preference."
+expected_need_context: []
+behavioral_diversity:
+  sample_count: 0
+  minimum_unique_signatures: 0
+validator:
+  gold_violations:
+    - "V_REMOTE_OPERATION_FROM_LOCK"
+  gold_non_violations:
+    - "N_LOCATION_QUERY_ONLY"
+metamorphic_group: null
+synthetic_canon: null
