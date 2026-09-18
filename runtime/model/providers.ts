@@ -286,7 +286,7 @@ function createAnthropicClient(config: ProviderConfig): ModelClient {
       const { data, latencyMs, requestId } = await postJson(
         baseUrl + '/v1/messages',
         {
-          Authorization: 'Bearer ' + config.apiKey,
+          'x-api-key': config.apiKey,
           'anthropic-version': '2023-06-01',
           'Content-Type': 'application/json',
         },
