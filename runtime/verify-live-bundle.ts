@@ -709,8 +709,18 @@ export async function verifyLiveFictionBundle(
         'manifest.json'
       );
     }
+    if (status && status !== 'ERROR') {
+      if ((callStageCounts.get('compiler') ?? 0) < 1) {
+        addIssue(
+          errors,
+          'CALL_STAGE_REQUIRED',
+          status + ' evidence requires at least one compiler call',
+          'manifest.json'
+        );
+      }
+    }
     if (status === 'OUTPUT') {
-      for (const stage of ['compiler', 'generator', 'validator']) {
+      for (const stage of ['generator', 'validator']) {
         if ((callStageCounts.get(stage) ?? 0) < 1) {
           addIssue(
             errors,
