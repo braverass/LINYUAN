@@ -1,0 +1,10 @@
+version: "0.5"
+
+violation:
+  required:
+    - id
+    - severity
+  fields:
+    location: object
+    actual: object
+    required_state: object
