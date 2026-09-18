@@ -1,29 +1,76 @@
-version: "0.5"
-
-active_context:
+$schema: "https://json-schema.org/draft/2020-12/schema"
+title: "ACTIVE_CONTEXT Spec 0.5"
+type: object
+additionalProperties: false
+required:
+  - version
+  - facts
+  - constraints
+  - unknowns
+  - inference_barriers
+  - open_dimensions
+  - scene_state
+properties:
+  version:
+    const: "0.5"
   facts:
     type: array
-    description: "Normalized semantic facts. No source text."
-
+    items:
+      type: object
+      additionalProperties: false
+      required: [id, type, proposition]
+      properties:
+        id: { type: string, minLength: 1 }
+        type: { type: string, minLength: 1 }
+        proposition: { type: string, minLength: 1 }
   constraints:
     type: array
-    description: "Hard constraints for generation."
-
+    items:
+      type: object
+      additionalProperties: false
+      required: [id, type, proposition, severity]
+      properties:
+        id: { type: string, minLength: 1 }
+        type: { type: string, minLength: 1 }
+        proposition: { type: string, minLength: 1 }
+        severity:
+          enum: [hard, soft]
   unknowns:
     type: array
-    description: "Known missing information."
-
+    items:
+      type: object
+      additionalProperties: false
+      required: [id, question, blocking]
+      properties:
+        id: { type: string, minLength: 1 }
+        question: { type: string, minLength: 1 }
+        blocking: { type: boolean }
   inference_barriers:
     type: array
-    description: "Forbidden automatic inference rules."
-
+    items:
+      type: object
+      additionalProperties: false
+      required: [id, rule]
+      properties:
+        id: { type: string, minLength: 1 }
+        rule: { type: string, minLength: 1 }
+  open_dimensions:
+    type: object
+    additionalProperties: false
+    required:
+      - action_selection
+      - dialogue_realization
+      - pacing
+      - nonverbal_behavior
+      - emotional_expression
+    properties:
+      action_selection: { type: boolean }
+      dialogue_realization: { type: boolean }
+      pacing: { type: boolean }
+      nonverbal_behavior: { type: boolean }
+      emotional_expression: { type: boolean }
   scene_state:
     type: object
-    description: "Current fictional state supplied to generator."
 
-forbidden_fields:
-  - raw_canon
-  - canon_excerpt
-  - provenance
-  - source_path
-  - evidence_refs
+# These fields are forbidden by additionalProperties and by runtime/compiler.ts:
+# raw_canon, canon_excerpt, provenance, source_id, source_path, evidence_refs
