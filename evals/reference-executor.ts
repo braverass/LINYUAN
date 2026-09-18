@@ -34,15 +34,17 @@ export const referenceExecutor: EvalExecutor = async (
     scene_state: testCase.scene_state,
   });
 
-  const signatures = Array.from(
-    {
-      length: Math.max(
-        testCase.behavioral_diversity.minimum_unique_signatures,
-        1
-      ),
-    },
-    (_, index) => `behavior-${index + 1}`
-  );
+  const requestedSamples = testCase.behavioral_diversity.sample_count;
+  const minimumUnique =
+    testCase.behavioral_diversity.minimum_unique_signatures;
+
+  const signatures = requestedSamples === 0
+    ? []
+    : Array.from(
+        { length: requestedSamples },
+        (_, index) =>
+          `behavior-${(index % Math.max(minimumUnique, 1)) + 1}`
+      );
 
   return {
     case_id: testCase.id,
