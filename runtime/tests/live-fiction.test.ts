@@ -10,6 +10,7 @@ import {
   runLiveFictionBundle,
   sanitizeLiveFailureMessage,
 } from '../live-fiction';
+import { createModelClient } from '../model/providers';
 import type {
   ModelClient,
   ModelRequest,
@@ -239,5 +240,73 @@ test('failure sanitizer removes configured secret values', () => {
   } finally {
     if (previous === undefined) delete process.env.LINYUAN_MODEL_API_KEY;
     else process.env.LINYUAN_MODEL_API_KEY = previous;
+  }
+});
+
+
+test('provider HTTP error secrets are redacted from bundle, public error, and cause', async () => {
+  const runDir = await mkdtemp(path.join(os.tmpdir(), 'linyuan-live-http-secret-'));
+  const originalFetch = globalThis.fetch;
+  const secret = 'provider-env-secret-9876';
+  const bearer = 'bearer-token-should-not-leak';
+  const previous = process.env.LINYUAN_TEST_TOKEN;
+  process.env.LINYUAN_TEST_TOKEN = secret;
+
+  globalThis.fetch = async () =>
+    new Response(
+      'upstream echoed ' + secret + ' and Bearer ' + bearer,
+      {
+        status: 401,
+        statusText: 'Unauthorized',
+        headers: { 'x-request-id': 'req_secret_fixture' },
+      }
+    );
+
+  try {
+    const client = createModelClient({
+      provider: 'openai',
+      model: 'fixture-model',
+      apiKey: secret,
+      baseUrl: 'https://openai.invalid/v1',
+    });
+    const clients: RuntimeModelClients = {
+      retrievalPlanner: client,
+      compiler: client,
+      generator: client,
+      validator: client,
+      patcher: client,
+    };
+
+    let caught: unknown;
+    try {
+      await runLiveFictionBundle(
+        {
+          request: '写一个测试场景',
+          semanticIds: ['AUTHOR.PERSONALITY'],
+          system: 'fixture fiction system',
+          repoRoot: process.cwd(),
+        },
+        { runDir, clients }
+      );
+    } catch (error) {
+      caught = error;
+    }
+
+    assert.ok(caught instanceof LiveFictionBundleError);
+    const publicMessage = (caught as Error).message;
+    const causeText = String((caught as Error & { cause?: unknown }).cause);
+    const failureText = await readFile(path.join(runDir, 'failure.json'), 'utf8');
+    const manifestText = await readFile(path.join(runDir, 'manifest.json'), 'utf8');
+
+    for (const text of [publicMessage, causeText, failureText, manifestText]) {
+      assert.equal(text.includes(secret), false);
+      assert.equal(text.includes(bearer), false);
+    }
+    assert.equal(failureText.includes('[REDACTED]'), true);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (previous === undefined) delete process.env.LINYUAN_TEST_TOKEN;
+    else process.env.LINYUAN_TEST_TOKEN = previous;
+    await rm(runDir, { recursive: true, force: true });
   }
 });
