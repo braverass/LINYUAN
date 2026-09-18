@@ -717,9 +717,9 @@ test('provider adapters preserve request format, model ids, usage and provider i
 
 test('adversarial: Gemini configured seed must be sent because GenerationConfig supports seed', async () => {
   const originalFetch = globalThis.fetch;
-  let captured: JsonRecord | null = null;
+  const capturedBodies: JsonRecord[] = [];
   globalThis.fetch = async (_input, init) => {
-    captured = JSON.parse(String(init?.body)) as JsonRecord;
+    capturedBodies.push(JSON.parse(String(init?.body)) as JsonRecord);
     return new Response(
       JSON.stringify({
         responseId: 'resp-seed',
@@ -746,7 +746,7 @@ test('adversarial: Gemini configured seed must be sent because GenerationConfig 
       prompt: '{}',
       responseFormat: 'json',
     });
-    const config = captured?.generationConfig as JsonRecord | undefined;
+    const config = capturedBodies[0]?.generationConfig as JsonRecord | undefined;
     assert.equal(
       config?.seed,
       42,
