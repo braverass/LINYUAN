@@ -1,13 +1,17 @@
 {
   "name": "linyuan-canon-runtime",
   "private": true,
-  "version": "0.5.0",
+  "version": "0.6.0",
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test runtime/tests/*.test.ts",
+    "test:runtime": "tsx --test runtime/tests/*.test.ts",
+    "test:eval": "tsx --test evals/tests/*.test.ts",
+    "test": "npm run test:runtime && npm run test:eval",
     "lint:registry": "tsx runtime/ci/lint-registry.ts",
-    "ci": "npm run typecheck && npm test && npm run lint:registry"
+    "eval": "tsx evals/runner.ts",
+    "eval:smoke": "tsx evals/runner.ts --enforce",
+    "ci": "npm run typecheck && npm test && npm run lint:registry && npm run eval:smoke"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
