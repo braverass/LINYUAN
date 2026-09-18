@@ -99,7 +99,7 @@ export class LiveFictionBundleError extends Error {
         (manifest.failure?.message ?? 'unknown error') +
         '. Evidence bundle: ' +
         runDir,
-      { cause }
+      { cause: sanitizedFailureCause(cause) }
     );
     this.name = 'LiveFictionBundleError';
     this.runDir = runDir;
@@ -234,6 +234,13 @@ function failureFrom(error: unknown): LiveFailure {
     name,
     message: sanitizeLiveFailureMessage(raw),
   };
+}
+
+function sanitizedFailureCause(error: unknown): Error {
+  const failure = failureFrom(error);
+  const safe = new Error(failure.message);
+  safe.name = failure.name;
+  return safe;
 }
 
 function inputArtifact(input: ProductionFictionInput): Record<string, unknown> {
