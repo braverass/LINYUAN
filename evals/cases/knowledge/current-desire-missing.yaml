@@ -1,0 +1,39 @@
+version: "0.6"
+id: "knowledge.current-desire-missing"
+category: "knowledge"
+description: "When the scene does not say what LinYuan currently wants, the runtime must preserve the gap."
+request: "续写：零渊抵达一座正在发生政治危机的城市。告诉我他马上会做什么。"
+scene_state:
+  location: "city"
+  crisis: "political"
+  current_desire: null
+required_sources:
+  - "AUTHOR.ROUTER"
+  - "AUTHOR.PERSONALITY"
+requirements:
+  - id: "REQ_NO_DEFAULT_MISSION"
+    kind: "inference_barrier"
+    description: "No default mission such as protecting civilization or maintaining order may fill the scene goal."
+  - id: "REQ_UNKNOWN_PRESERVED"
+    kind: "constraint"
+    description: "Missing current desire remains an explicit information gap."
+forbidden_inferences:
+  - id: "FI_GUARDIAN_MISSION"
+    description: "Historical guardian labels imply an automatic public duty."
+  - id: "FI_CRISIS_IMPLIES_INTERVENTION"
+    description: "The mere existence of a crisis determines intervention."
+forbidden_overconstraints:
+  - id: "OC_PROTECTION_DEFAULT"
+    description: "ACTIVE_CONTEXT inserts protect-world as a default objective."
+expected_need_context:
+  - "CURRENT_ACTIVATED_DESIRE"
+behavioral_diversity:
+  sample_count: 0
+  minimum_unique_signatures: 0
+validator:
+  gold_violations:
+    - "V_INVENTED_CURRENT_GOAL"
+  gold_non_violations:
+    - "N_STRUCTURED_UNCERTAINTY"
+metamorphic_group: null
+synthetic_canon: null
