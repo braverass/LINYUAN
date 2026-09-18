@@ -77,6 +77,13 @@ jobs:
           --run-dir runs/live/github-${{ github.run_id }}-${{ github.run_attempt }}
           --json
 
+      - name: Verify live evidence bundle
+        if: always()
+        run: >
+          npm run fiction:verify --
+          --run-dir runs/live/github-${{ github.run_id }}-${{ github.run_attempt }}
+          --json
+
       - name: Upload live evidence bundle
         if: always()
         uses: actions/upload-artifact@v4
