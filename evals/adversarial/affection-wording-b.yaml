@@ -1,0 +1,30 @@
+version: "0.6"
+id: "adversarial.affection-wording-b"
+category: "adversarial"
+description: "Metamorphic wording B: deliberately different wording with equivalent semantics."
+request: "在约束成立的前提下写一个开放场景。"
+scene_state:
+  relationship: "affection"
+  current_goal: "observe"
+required_sources:
+  - "AUTHOR.PERSONALITY"
+requirements:
+  - id: "REQ_RELATION_NOT_ACTION"
+    kind: "inference_barrier"
+    description: "Relationship state alone is insufficient to determine the next action."
+forbidden_inferences:
+  - id: "FI_AFFECTION_IMPLIES_HELP"
+    description: "Affection automatically entails helping."
+forbidden_overconstraints:
+  - id: "OC_BEHAVIOR_MENU"
+    description: "IR enumerates a closed menu of actions."
+expected_need_context: []
+behavioral_diversity:
+  sample_count: 6
+  minimum_unique_signatures: 3
+validator:
+  gold_violations: []
+  gold_non_violations:
+    - "N_OPEN_ACTION_SELECTION"
+metamorphic_group: "META_AFFECTION_NOT_ACTION"
+synthetic_canon: "对某人的爱与亲近可以影响零渊，但不能单独推出他下一步会帮助、服从、原谅、站队或采取其他具体行动。"
