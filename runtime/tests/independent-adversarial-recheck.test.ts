@@ -329,24 +329,31 @@ test('independent provider mock: request formats, ids, model ids and usage are p
     const ge = await gemini.complete(request);
     const an = await anthropic.complete(request);
 
-    assert.equal(seen[0].url, 'https://openai.invalid/v1/responses');
-    assert.equal(seen[0].headers.Authorization, 'Bearer openai-key');
-    assert.equal(seen[0].body.model, 'openai-configured-model');
-    assert.deepEqual(seen[0].body.text, { format: { type: 'json_object' } });
+    const openaiWire = seen[0];
+    const geminiWire = seen[1];
+    const anthropicWire = seen[2];
+    assert.ok(openaiWire);
+    assert.ok(geminiWire);
+    assert.ok(anthropicWire);
+
+    assert.equal(openaiWire.url, 'https://openai.invalid/v1/responses');
+    assert.equal(openaiWire.headers.Authorization, 'Bearer openai-key');
+    assert.equal(openaiWire.body.model, 'openai-configured-model');
+    assert.deepEqual(openaiWire.body.text, { format: { type: 'json_object' } });
 
     assert.equal(
-      seen[1].url,
+      geminiWire.url,
       'https://gemini.invalid/v1beta/models/gemini-configured-model:generateContent'
     );
-    assert.equal(seen[1].headers['x-goog-api-key'], 'gemini-key');
-    const gc = seen[1].body.generationConfig as JsonRecord;
+    assert.equal(geminiWire.headers['x-goog-api-key'], 'gemini-key');
+    const gc = geminiWire.body.generationConfig as JsonRecord;
     assert.equal(gc.responseMimeType, 'application/json');
     assert.equal(gc.seed, 42);
 
-    assert.equal(seen[2].url, 'https://anthropic.invalid/v1/messages');
-    assert.equal(seen[2].headers['x-api-key'], 'anthropic-key');
-    assert.equal('Authorization' in seen[2].headers, false);
-    assert.equal(seen[2].headers['anthropic-version'], '2023-06-01');
+    assert.equal(anthropicWire.url, 'https://anthropic.invalid/v1/messages');
+    assert.equal(anthropicWire.headers['x-api-key'], 'anthropic-key');
+    assert.equal('Authorization' in anthropicWire.headers, false);
+    assert.equal(anthropicWire.headers['anthropic-version'], '2023-06-01');
 
     assert.equal(oa.model, 'openai-returned-model');
     assert.equal(oa.requestId, 'req-openai');
