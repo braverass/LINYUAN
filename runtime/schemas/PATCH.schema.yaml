@@ -1,0 +1,13 @@
+version: "0.5"
+
+patch:
+  required:
+    - allowed_scope
+    - preserve
+    - required_change
+
+  isolation:
+    access:
+      canon: deny
+      provenance: deny
+      evidence_refs: deny
