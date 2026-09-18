@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -15,6 +15,7 @@ import type {
   ModelRequest,
   ModelResponse,
 } from '../model/types';
+import { verifyLiveFictionBundle } from '../verify-live-bundle';
 
 function fixtureClient(
   handler: (request: ModelRequest) => string
@@ -121,6 +122,21 @@ test('live fiction writes an auditable evidence bundle', async () => {
     assert.equal(manifest.artifacts['trace.json']?.sha256.length, 64);
     assert.equal(manifest.artifacts['calls.json']?.sha256.length, 64);
     assert.equal(manifest.artifacts['output.md']?.sha256.length, 64);
+
+    const verified = await verifyLiveFictionBundle(runDir);
+    assert.equal(verified.ok, true);
+    assert.equal(verified.status, 'OUTPUT');
+    assert.deepEqual(verified.errors, []);
+
+    await writeFile(path.join(runDir, 'output.md'), '篡改后的正文。\n', 'utf8');
+    const tampered = await verifyLiveFictionBundle(runDir);
+    assert.equal(tampered.ok, false);
+    assert.equal(
+      tampered.errors.some(
+        (issue) => issue.code === 'ARTIFACT_HASH_MISMATCH'
+      ),
+      true
+    );
   } finally {
     await rm(runDir, { recursive: true, force: true });
   }
@@ -186,6 +202,27 @@ test('live fiction preserves failure evidence without recording secrets', async 
   } finally {
     if (previous === undefined) delete process.env.LINYUAN_TEST_API_KEY;
     else process.env.LINYUAN_TEST_API_KEY = previous;
+    await rm(runDir, { recursive: true, force: true });
+  }
+});
+
+test('live fiction rejects a non-empty evidence directory', async () => {
+  const runDir = await mkdtemp(path.join(os.tmpdir(), 'linyuan-live-stale-'));
+  try {
+    await writeFile(path.join(runDir, 'output.md'), 'stale output\n', 'utf8');
+    await assert.rejects(
+      () =>
+        runLiveFictionBundle(
+          {
+            request: '写一个测试场景',
+          },
+          { runDir }
+        ),
+      /run directory must be empty/
+    );
+    const stale = await readFile(path.join(runDir, 'output.md'), 'utf8');
+    assert.equal(stale, 'stale output\n');
+  } finally {
     await rm(runDir, { recursive: true, force: true });
   }
 });
