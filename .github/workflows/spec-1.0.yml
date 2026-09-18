@@ -27,8 +27,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Assert recheck code ancestry
-        run: git merge-base --is-ancestor 73e6fcc30c4f82e478635f16c8eb9718025f5a31 HEAD
+        with:
+          ref: 73e6fcc30c4f82e478635f16c8eb9718025f5a31
+          fetch-depth: 1
+      - name: Assert exact hardened main
+        run: test "$(git rev-parse HEAD)" = "73e6fcc30c4f82e478635f16c8eb9718025f5a31"
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
