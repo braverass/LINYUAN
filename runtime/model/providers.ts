@@ -63,6 +63,20 @@ async function postJson(
   };
 }
 
+function requiredResponseString(
+  data: Record<string, unknown>,
+  key: string,
+  provider: ModelProvider
+): string {
+  const value = data[key];
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw new Error(
+      'Model API response from ' + provider + ' is missing required ' + key
+    );
+  }
+  return value;
+}
+
 function usageObject(
   inputTokens: unknown,
   outputTokens: unknown,
@@ -117,6 +131,11 @@ function createOpenAIClient(config: ProviderConfig): ModelClient {
     defaults,
     async complete(request): Promise<ModelResponse> {
       const settings = mergedDefaults(defaults, request);
+      if (settings.seed !== undefined) {
+        throw new Error(
+          'OpenAI Responses adapter does not support seed; remove the seed setting'
+        );
+      }
       const body: Record<string, unknown> = {
         model: config.model,
         input: request.prompt,
@@ -154,7 +173,7 @@ function createOpenAIClient(config: ProviderConfig): ModelClient {
       );
       const result: ModelResponse = {
         provider: 'openai',
-        model: typeof data.model === 'string' ? data.model : config.model,
+        model: requiredResponseString(data, 'model', 'openai'),
         text: openAIText(data),
         latencyMs,
       };
@@ -186,6 +205,7 @@ function createGeminiClient(config: ProviderConfig): ModelClient {
         generationConfig.temperature = settings.temperature;
       }
       if (settings.topP !== undefined) generationConfig.topP = settings.topP;
+      if (settings.seed !== undefined) generationConfig.seed = settings.seed;
       if (request.responseFormat === 'json') {
         generationConfig.responseMimeType = 'application/json';
       }
@@ -249,10 +269,7 @@ function createGeminiClient(config: ProviderConfig): ModelClient {
       );
       const result: ModelResponse = {
         provider: 'gemini',
-        model:
-          typeof data.modelVersion === 'string'
-            ? data.modelVersion
-            : config.model,
+        model: requiredResponseString(data, 'modelVersion', 'gemini'),
         text,
         latencyMs,
       };
@@ -274,6 +291,11 @@ function createAnthropicClient(config: ProviderConfig): ModelClient {
     defaults,
     async complete(request): Promise<ModelResponse> {
       const settings = mergedDefaults(defaults, request);
+      if (settings.seed !== undefined) {
+        throw new Error(
+          'Anthropic Messages adapter does not support seed; remove the seed setting'
+        );
+      }
       const body: Record<string, unknown> = {
         model: config.model,
         max_tokens: settings.maxOutputTokens ?? 4096,
@@ -316,7 +338,7 @@ function createAnthropicClient(config: ProviderConfig): ModelClient {
       const usage = usageObject(inputTokens, outputTokens, totalTokens);
       const result: ModelResponse = {
         provider: 'anthropic',
-        model: typeof data.model === 'string' ? data.model : config.model,
+        model: requiredResponseString(data, 'model', 'anthropic'),
         text,
         latencyMs,
       };
