@@ -352,32 +352,55 @@ test('provider HTTP contracts preserve request format, exact model identity, usa
   }
 });
 
-test('provider HTTP errors preserve status/request id and successful responses require returned model identity', async () => {
+test('provider HTTP errors preserve status/request id, redact secrets, and successful responses require returned model identity', async () => {
   const originalFetch = globalThis.fetch;
+  const envSecret = 'provider-env-secret-5555';
+  const apiKey = 'provider-api-key-1234';
+  const bearer = 'provider-bearer-secret';
+  const previous = process.env.LINYUAN_PROVIDER_TEST_SECRET;
+  process.env.LINYUAN_PROVIDER_TEST_SECRET = envSecret;
 
   try {
     globalThis.fetch = async () =>
-      new Response('provider exploded', {
-        status: 429,
-        statusText: 'Too Many Requests',
-        headers: { 'x-request-id': 'req_http_error' },
-      });
+      new Response(
+        'provider exploded ' +
+          envSecret +
+          ' ' +
+          apiKey +
+          ' Bearer ' +
+          bearer,
+        {
+          status: 429,
+          statusText: 'Too Many Requests',
+          headers: { 'x-request-id': 'req_http_error' },
+        }
+      );
 
     const openai = createModelClient({
       provider: 'openai',
       model: 'configured',
-      apiKey: 'key',
+      apiKey,
       baseUrl: 'https://openai.invalid/v1',
     });
-    await assert.rejects(
-      () =>
-        openai.complete({
-          stage: 'compiler',
-          prompt: '{}',
-          responseFormat: 'json',
-        }),
-      /429 Too Many Requests.*req_http_error.*provider exploded/
-    );
+
+    let httpError: unknown;
+    try {
+      await openai.complete({
+        stage: 'compiler',
+        prompt: '{}',
+        responseFormat: 'json',
+      });
+    } catch (error) {
+      httpError = error;
+    }
+    assert.ok(httpError instanceof Error);
+    assert.match(httpError.message, /429 Too Many Requests/);
+    assert.match(httpError.message, /req_http_error/);
+    assert.match(httpError.message, /provider exploded/);
+    assert.equal(httpError.message.includes(envSecret), false);
+    assert.equal(httpError.message.includes(apiKey), false);
+    assert.equal(httpError.message.includes(bearer), false);
+    assert.equal(httpError.message.includes('[REDACTED]'), true);
 
     globalThis.fetch = async () =>
       new Response(
@@ -395,6 +418,8 @@ test('provider HTTP errors preserve status/request id and successful responses r
     );
   } finally {
     globalThis.fetch = originalFetch;
+    if (previous === undefined) delete process.env.LINYUAN_PROVIDER_TEST_SECRET;
+    else process.env.LINYUAN_PROVIDER_TEST_SECRET = previous;
   }
 });
 
