@@ -116,6 +116,9 @@ function createOpenAIClient(config: ProviderConfig): ModelClient {
         store: false,
       };
       if (request.system) body.instructions = request.system;
+      if (request.responseFormat === 'json') {
+        body.text = { format: { type: 'json_object' } };
+      }
       if (settings.maxOutputTokens !== undefined) {
         body.max_output_tokens = settings.maxOutputTokens;
       }

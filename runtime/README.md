@@ -69,3 +69,44 @@ npm run ci
 ```
 
 GitHub Actions runs the same `npm run ci` contract for runtime-related changes.
+
+
+## Production fiction entry · Spec 0.8
+
+The runtime now has a production entry point rather than only evaluation
+runners.
+
+Configure a provider:
+
+```bash
+export LINYUAN_MODEL_PROVIDER=openai
+export LINYUAN_MODEL_ID=<exact-model-id>
+export OPENAI_API_KEY=...
+```
+
+Run a real fiction request:
+
+```bash
+npm run fiction -- \
+  --request "写零渊第一次进入庄园镇的场景" \
+  --scene '{"location":"庄园镇","time":"night"}'
+```
+
+For longer inputs, keep request and scene state in files:
+
+```bash
+npm run fiction -- \
+  --request-file request.txt \
+  --scene-file scene.json \
+  --output runs/fiction.md \
+  --trace-output runs/trace.json \
+  --calls-output runs/calls.json
+```
+
+The normal path uses the Retrieval Planner. `--semantic-id <id>` is available
+for deterministic/reproduction runs and may be repeated.
+
+The reusable API is `runProductionFiction()` in
+`runtime/production-fiction.ts`. It executes the same Registry-backed
+Retriever -> Compiler -> isolated Generator -> Validator -> local Patcher
+pipeline used by the runtime contract.
