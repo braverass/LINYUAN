@@ -136,11 +136,20 @@ Spec 0.7.2 also verifies the manifest against the repository state used to
 interpret the baseline. The verifier recomputes:
 
 - the loaded evaluation case-set hash;
-- every model prompt-template hash;
+- every model prompt-template hash, including the executable runtime adapter source;
 - every registered Canon source hash.
 
 A manifest with `commit_sha: UNKNOWN` is rejected. An exact experiment commit
 can also be pinned with `LINYUAN_BASELINE_COMMIT`.
+
+Model execution configuration is a separate provenance dimension. If model
+provider/model environment variables are present during
+`eval:verify-baseline`, the verifier also compares all six recorded stage
+descriptors (retrieval planner, compiler, generator, validator, patcher and
+Judge), including defaults and non-secret endpoint provenance. API keys are not
+required for this comparison and no provider request is made. If no model
+configuration is supplied, repository provenance is still verified and the
+result explicitly reports `stage_models_verified: false`.
 
 This distinction matters because a perfectly paired report and manifest can
 still be stale after cases, prompts, or Canon change. Two matching JSON files
@@ -194,5 +203,20 @@ npm run eval:verify-baseline -- \
   evals/baselines/report.json \
   evals/baselines/manifest.json
 ```
+
+To also bind the baseline to the model configuration, provide the same
+provider/model variables used for the experiment. API keys are unnecessary:
+
+```bash
+LINYUAN_MODEL_PROVIDER=openai \
+LINYUAN_MODEL_ID=<exact-model-id> \
+npm run eval:verify-baseline -- \
+  evals/baselines/report.json \
+  evals/baselines/manifest.json
+```
+
+Stage-specific overrides such as `LINYUAN_COMPILER_MODEL` and
+`LINYUAN_JUDGE_MODEL` are honored with the same fallback rules as real
+execution.
 
 CI never requires external API keys. CI tests the boundary and wiring with deterministic local doubles; real model baselines are explicit experiments.
