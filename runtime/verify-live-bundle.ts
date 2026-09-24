@@ -1119,6 +1119,7 @@ export async function verifyLiveFictionBundle(
       if (
         customSystem &&
         (typeof input.system_override !== 'string' ||
+          input.system_override.trim().length === 0 ||
           !runtimeContract ||
           runtimeContract.system_hash !== stableHash(input.system_override))
       ) {
