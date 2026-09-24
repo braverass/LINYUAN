@@ -76,6 +76,7 @@ async function invoke(
     stage: request.stage,
     provider: response.provider,
     model: response.model,
+    requested_model: client.model,
     request_hash: stableHash(request),
     response_hash: stableHash(response.text),
     response_format: request.responseFormat,
