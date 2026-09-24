@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import { loadRegistry, resolveRegisteredSourcePath } from '../runtime/registry';
 import { stableHash } from '../runtime/trace';
+import { detectGitCommit } from '../runtime/git';
 import {
   MODEL_PROMPT_TEMPLATES,
   type RuntimeModelClients,
@@ -31,22 +32,6 @@ export interface RealEvalManifest {
   prompt_template_hashes: Record<string, string>;
   source_hashes: Record<string, string>;
   calls: ModelCallRecord[];
-}
-
-async function detectGitCommit(repoRoot: string): Promise<string> {
-  if (process.env.GITHUB_SHA) return process.env.GITHUB_SHA;
-  if (process.env.LINYUAN_COMMIT) return process.env.LINYUAN_COMMIT;
-
-  try {
-    const head = (await readFile(path.join(repoRoot, '.git/HEAD'), 'utf8')).trim();
-    if (!head.startsWith('ref: ')) return head;
-    const refPath = head.slice(5).trim();
-    return (
-      await readFile(path.join(repoRoot, '.git', refPath), 'utf8')
-    ).trim();
-  } catch {
-    return 'UNKNOWN';
-  }
 }
 
 function descriptor(client: ModelClient) {
