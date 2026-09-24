@@ -492,6 +492,48 @@ function validateTraceScope(
   }
 }
 
+function validateTracePatchScopeOverlaps(
+  values: unknown[],
+  errors: LiveBundleVerificationIssue[]
+): void {
+  const byParagraph = new Map<number, Array<[number, number]>>();
+  for (const raw of values) {
+    const scope = asRecord(raw);
+    if (
+      !scope ||
+      !positiveSafeInteger(scope.paragraph) ||
+      !Array.isArray(scope.sentences) ||
+      scope.sentences.length !== 2 ||
+      !positiveSafeInteger(scope.sentences[0]) ||
+      !positiveSafeInteger(scope.sentences[1])
+    ) {
+      continue;
+    }
+    const paragraph = scope.paragraph as number;
+    const start = scope.sentences[0] as number;
+    const end = scope.sentences[1] as number;
+    if (end < start) continue;
+
+    const entries = byParagraph.get(paragraph) ?? [];
+    if (
+      entries.some(
+        ([otherStart, otherEnd]) =>
+          start <= otherEnd && otherStart <= end
+      )
+    ) {
+      addIssue(
+        errors,
+        'TRACE_PATCH_SCOPE_OVERLAP',
+        'trace.patcher.scopes contains overlapping patch ranges',
+        'trace.json'
+      );
+      return;
+    }
+    entries.push([start, end]);
+    byParagraph.set(paragraph, entries);
+  }
+}
+
 async function verifyRepositoryBinding(
   repoRootInput: string,
   manifest: JsonRecord,
@@ -1752,6 +1794,7 @@ export async function verifyLiveFictionBundle(
         for (const scope of patchScopes) {
           validateTraceScope(scope, errors);
         }
+        validateTracePatchScopeOverlaps(patchScopes, errors);
         if (
           manifestCalls &&
           patchScopes.length !== (callStageCounts.get('patcher') ?? 0)
