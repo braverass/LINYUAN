@@ -239,14 +239,20 @@ test('adversarial recheck: impossible successful max_context_rounds is rejected'
   }
 });
 
-test('compatibility boundary: old 0.9 shape without response_id still passes when commit provenance is concrete', async () => {
+test('compatibility boundary: old 0.9 shape without response_id/requested_model still passes when commit provenance is concrete', async () => {
   const runDir = await mkdtemp(path.join(os.tmpdir(), 'linyuan-recheck-old09-'));
   try {
     await makeBundle(runDir);
     const manifest = await readJson(path.join(runDir, 'manifest.json'));
     const calls = await readJson(path.join(runDir, 'calls.json'));
-    for (const item of calls) delete item.response_id;
-    for (const item of manifest.calls) delete item.response_id;
+    for (const item of calls) {
+      delete item.response_id;
+      delete item.requested_model;
+    }
+    for (const item of manifest.calls) {
+      delete item.response_id;
+      delete item.requested_model;
+    }
     await writeTrackedJson(runDir, 'calls.json', calls, manifest);
     await saveManifest(runDir, manifest);
 
@@ -435,6 +441,93 @@ test('repository-bound recheck binds registry and executable prompt hashes', asy
       bound.errors.some((issue) => issue.code === 'REPO_PROMPT_HASH_MISMATCH'),
       true
     );
+  } finally {
+    await rm(runDir, { recursive: true, force: true });
+  }
+});
+
+
+test('provider-returned snapshot model may differ from the configured alias', async () => {
+  const runDir = await mkdtemp(path.join(os.tmpdir(), 'linyuan-recheck-model-alias-'));
+  try {
+    const aliasClient: ModelClient = {
+      provider: 'openai',
+      model: 'fixture-alias',
+      defaults: {},
+      async complete(request: ModelRequest): Promise<ModelResponse> {
+        const common = {
+          provider: 'openai' as const,
+          model: 'fixture-alias-2026-09-24',
+          latencyMs: 1,
+        };
+        if (request.stage === 'compiler') {
+          return {
+            ...common,
+            text: JSON.stringify({
+              status: 'READY',
+              activeContext: {
+                version: '0.5',
+                facts: [],
+                constraints: [],
+                unknowns: [],
+                inference_barriers: [],
+                open_dimensions: {
+                  action_selection: true,
+                  dialogue_realization: true,
+                  pacing: true,
+                  nonverbal_behavior: true,
+                  emotional_expression: true,
+                },
+              },
+              provenance: {},
+            }),
+          };
+        }
+        if (request.stage === 'generator') {
+          return {
+            ...common,
+            text: JSON.stringify({ status: 'DRAFT', draft: 'fixture output' }),
+          };
+        }
+        if (request.stage === 'validator') {
+          return {
+            ...common,
+            text: JSON.stringify({ violations: [] }),
+          };
+        }
+        throw new Error('unexpected stage ' + request.stage);
+      },
+    };
+    const aliasClients: RuntimeModelClients = {
+      retrievalPlanner: aliasClient,
+      compiler: aliasClient,
+      generator: aliasClient,
+      validator: aliasClient,
+      patcher: aliasClient,
+    };
+
+    const run = await runLiveFictionBundle(
+      {
+        request: 'fixture request',
+        sceneState: {},
+        semanticIds: ['AUTHOR.PERSONALITY'],
+        maxContextRounds: 3,
+        system: 'fixture system',
+        repoRoot: process.cwd(),
+      },
+      { runDir, clients: aliasClients }
+    );
+
+    assert.equal(
+      run.manifest.calls.every(
+        (call) =>
+          call.requested_model === 'fixture-alias' &&
+          call.model === 'fixture-alias-2026-09-24'
+      ),
+      true
+    );
+    const report = await verifyLiveFictionBundle(runDir);
+    assert.equal(report.ok, true, JSON.stringify(report.errors));
   } finally {
     await rm(runDir, { recursive: true, force: true });
   }
