@@ -184,9 +184,20 @@ export async function createModelBackedRuntime(
     return validateSemanticIds(result.semantic_ids, registry);
   };
 
+  const assertSourceRole = (
+    semanticIds: string[],
+    role: 'orchestrator' | 'compiler' | 'validator'
+  ): void => {
+    for (const semanticId of semanticIds) {
+      assertRoleAccess(registry, semanticId, role);
+    }
+  };
+
   const adapters: RuntimeAdapters = {
-    retrieve: async (semanticIds) =>
-      retrieveBySemanticIds(semanticIds, { repoRoot, registry }),
+    retrieve: async (semanticIds) => {
+      assertSourceRole(semanticIds, 'orchestrator');
+      return retrieveBySemanticIds(semanticIds, { repoRoot, registry });
+    },
 
     planInitialRetrieval,
 
@@ -212,6 +223,10 @@ export async function createModelBackedRuntime(
     },
 
     compile: async (input) => {
+      assertSourceRole(
+        input.canonFragments.map((fragment) => fragment.semanticId),
+        'compiler'
+      );
       const output = await invokeJson<CompilerModelOutput>(
         clients.compiler,
         {
@@ -268,6 +283,10 @@ export async function createModelBackedRuntime(
     },
 
     validate: async (input) => {
+      assertSourceRole(
+        input.evidence.rawCanon.map((fragment) => fragment.semanticId),
+        'validator'
+      );
       const result = await invokeJson<{ violations: Violation[] }>(
         clients.validator,
         {
