@@ -45,4 +45,6 @@ jobs:
         with:
           node-version: "22"
       - run: npm install --ignore-scripts
+      - name: Emit generated lockfile
+        run: cat package-lock.json
       - run: npm run ci
