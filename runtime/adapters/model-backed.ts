@@ -282,9 +282,10 @@ export async function createModelBackedRuntime(
         },
         calls
       );
-      const violations = Array.isArray(result.violations)
-        ? result.violations
-        : [];
+      if (!Array.isArray(result.violations)) {
+        throw new Error('Validator model must return violations: []');
+      }
+      const violations = result.violations;
       artifacts.validator_calls.push({
         input: structuredClone(input),
         violations: structuredClone(violations),
