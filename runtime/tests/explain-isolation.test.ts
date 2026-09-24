@@ -97,7 +97,7 @@ test('EXPLAIN default output rejects semantic-id/process leakage', async () => {
         },
         clients
       ),
-    /exposes internal retrieval metadata/
+    /exposes internal (?:retrieval|source) metadata/
   );
 });
 
