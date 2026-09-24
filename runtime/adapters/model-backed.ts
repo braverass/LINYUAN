@@ -75,6 +75,7 @@ async function invoke(
   calls: ModelCallRecord[]
 ): Promise<ModelResponse> {
   const response = await client.complete(request);
+  validateModelResponse(client, response);
   calls.push({
     stage: request.stage,
     provider: response.provider,
