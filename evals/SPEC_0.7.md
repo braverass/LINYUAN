@@ -142,9 +142,15 @@ interpret the baseline. The verifier recomputes:
 A manifest with `commit_sha: UNKNOWN` is rejected. An exact experiment commit
 can also be pinned with `LINYUAN_BASELINE_COMMIT`.
 
-Model execution configuration is a separate provenance dimension. If model
+The baseline verifier always checks the manifest's model evidence for internal
+consistency: all six stage descriptors must exist, and every recorded call must
+agree with its stage descriptor on provider, configured/requested model and
+effective settings. Provider-returned snapshot model ids may differ from a
+configured alias.
+
+Model execution configuration is also an external provenance dimension. If model
 provider/model environment variables are present during
-`eval:verify-baseline`, the verifier also compares all six recorded stage
+`eval:verify-baseline`, the verifier additionally compares all six recorded stage
 descriptors (retrieval planner, compiler, generator, validator, patcher and
 Judge), including defaults and non-secret endpoint provenance. API keys are not
 required for this comparison and no provider request is made. If no model
