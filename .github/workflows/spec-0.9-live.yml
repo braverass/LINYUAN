@@ -37,7 +37,7 @@ jobs:
         with:
           node-version: "22"
 
-      - run: npm install --ignore-scripts
+      - run: npm ci --ignore-scripts
 
       - name: Verify selected provider secret exists
         shell: bash
@@ -75,6 +75,7 @@ jobs:
           --scene-file live-scene.json
           --max-context-rounds 2
           --run-dir runs/live/github-${{ github.run_id }}-${{ github.run_attempt }}
+          --repo-root .
           --json
 
       - name: Verify live evidence bundle
