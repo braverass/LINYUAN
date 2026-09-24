@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 
-import { runProductionExplain } from './explain';
+import { publicExplainOutput, runProductionExplain } from './explain';
 
 interface CliOptions {
   request?: string;
@@ -105,14 +105,15 @@ async function runCli(args: string[]): Promise<number> {
   }
 
   const run = await runProductionExplain(input);
+  const output = publicExplainOutput(run);
   if (options.json) {
-    process.stdout.write(JSON.stringify(run, null, 2) + '\n');
+    process.stdout.write(JSON.stringify(output, null, 2) + '\n');
     return 0;
   }
 
-  process.stdout.write(run.answer + '\n');
-  if (run.evidence_summary) {
-    process.stdout.write('\n' + run.evidence_summary + '\n');
+  process.stdout.write(output.answer + '\n');
+  if (output.evidence_summary) {
+    process.stdout.write('\n' + output.evidence_summary + '\n');
   }
   return 0;
 }
