@@ -129,7 +129,7 @@ export function validateActiveContextShape(value: unknown): ActiveContext {
         item.proposition,
         'ACTIVE_CONTEXT.constraints[' + index + '].proposition'
       ),
-      severity: item.severity,
+      severity: item.severity as 'hard' | 'soft',
     };
   });
 
