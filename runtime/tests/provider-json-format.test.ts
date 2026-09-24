@@ -510,3 +510,29 @@ test('model settings reject invalid token limits and non-integer seeds before fe
     globalThis.fetch = originalFetch;
   }
 });
+
+
+test('provider clients record endpoint provenance without exposing the endpoint URL', () => {
+  const customUrl = 'https://proxy.example.invalid/v1?token=secret-value';
+  const custom = createModelClient({
+    provider: 'openai',
+    model: 'fixture',
+    apiKey: 'key',
+    baseUrl: customUrl,
+  });
+
+  assert.equal(custom.endpoint_kind, 'custom');
+  assert.equal(typeof custom.endpoint_hash, 'string');
+  assert.equal(custom.endpoint_hash?.length, 64);
+  assert.equal(custom.endpoint_hash?.includes('proxy.example.invalid'), false);
+  assert.equal(custom.endpoint_hash?.includes('secret-value'), false);
+
+  const official = createModelClient({
+    provider: 'openai',
+    model: 'fixture',
+    apiKey: 'key',
+  });
+  assert.equal(official.endpoint_kind, 'official');
+  assert.equal(official.endpoint_hash?.length, 64);
+  assert.notEqual(custom.endpoint_hash, official.endpoint_hash);
+});
