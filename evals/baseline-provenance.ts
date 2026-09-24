@@ -2,6 +2,10 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { MODEL_PROMPT_TEMPLATES } from '../runtime/adapters/model-backed';
+import {
+  modelDescriptorFromEnv,
+  type ModelEnvironmentDescriptor,
+} from '../runtime/model/providers';
 import { loadRegistry, resolveRegisteredSourcePath } from '../runtime/registry';
 import { stableHash } from '../runtime/trace';
 import { loadEvalCases } from './loader';
@@ -11,6 +15,55 @@ export interface BaselineProvenanceSnapshot {
   case_set_hash: string;
   prompt_template_hashes: Record<string, string>;
   source_hashes: Record<string, string>;
+}
+
+export type BaselineStageModels = Record<string, ModelEnvironmentDescriptor>;
+
+const BASELINE_STAGE_ENV = [
+  ['retrieval_planner', 'retrieval'],
+  ['compiler', 'compiler'],
+  ['generator', 'generator'],
+  ['validator', 'validator'],
+  ['patcher', 'patcher'],
+  ['eval_judge', 'judge'],
+] as const;
+
+export function expectedBaselineStageModelsFromEnv():
+  | BaselineStageModels
+  | null {
+  const resolved = BASELINE_STAGE_ENV.map(([manifestStage, envStage]) => [
+    manifestStage,
+    modelDescriptorFromEnv(envStage),
+  ] as const);
+
+  if (resolved.every(([, descriptor]) => descriptor === null)) {
+    return null;
+  }
+
+  const missing = resolved
+    .filter(([, descriptor]) => descriptor === null)
+    .map(([stage]) => stage);
+  if (missing.length > 0) {
+    throw new Error(
+      'Baseline model provenance is only partially configured; missing stages: ' +
+        missing.join(', ')
+    );
+  }
+
+  return Object.fromEntries(
+    resolved.map(([stage, descriptor]) => [stage, descriptor])
+  ) as BaselineStageModels;
+}
+
+export function assertBaselineStageModels(
+  manifest: RealEvalManifest,
+  expected: BaselineStageModels
+): void {
+  if (stableHash(manifest.stage_models) !== stableHash(expected)) {
+    throw new Error(
+      'Baseline provenance mismatch: stage_models differ from configured model descriptors'
+    );
+  }
 }
 
 async function promptTemplateHashes(
