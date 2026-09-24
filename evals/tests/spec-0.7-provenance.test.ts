@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 
 import {
   assertBaselineProvenance,
+  assertBaselineStageModels,
   type BaselineProvenanceSnapshot,
+  type BaselineStageModels,
 } from '../baseline-provenance';
 import type { RealEvalManifest } from '../run-manifest';
 
@@ -83,5 +85,42 @@ test('baseline provenance can pin an exact experiment commit', () => {
   assert.throws(
     () => assertBaselineProvenance(manifest(), current, 'def456'),
     /does not match expected commit/
+  );
+});
+
+
+test('baseline model provenance accepts the configured stage model descriptors', () => {
+  const expected: BaselineStageModels = {
+    compiler: {
+      provider: 'openai',
+      model: 'fixture-model',
+      defaults: { temperature: 0.2 },
+      endpoint_kind: 'official',
+      endpoint_hash: 'a'.repeat(64),
+    },
+  };
+  const value = manifest();
+  value.stage_models = structuredClone(expected);
+
+  assert.doesNotThrow(() => assertBaselineStageModels(value, expected));
+});
+
+test('baseline model provenance rejects a changed model configuration', () => {
+  const expected: BaselineStageModels = {
+    compiler: {
+      provider: 'openai',
+      model: 'fixture-model',
+      defaults: {},
+      endpoint_kind: 'official',
+      endpoint_hash: 'a'.repeat(64),
+    },
+  };
+  const value = manifest();
+  value.stage_models = structuredClone(expected);
+  value.stage_models.compiler!.model = 'different-model';
+
+  assert.throws(
+    () => assertBaselineStageModels(value, expected),
+    /stage_models/
   );
 });
