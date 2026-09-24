@@ -6,6 +6,7 @@ export type ModelStage =
   | 'generator'
   | 'validator'
   | 'patcher'
+  | 'explain'
   | 'eval_judge';
 
 export interface ModelDefaults {
