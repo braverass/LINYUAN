@@ -5,6 +5,7 @@ import {
   envelope,
   unwrapAllowed,
 } from './types';
+import { validateMissingContexts } from './contracts';
 
 export interface GeneratorPayload {
   system: string;
@@ -102,11 +103,19 @@ export async function generateIsolated(
   assertNoCanonLeak(payload);
   const result = await adapter(structuredClone(payload));
 
+  if (result.status !== 'DRAFT' && result.status !== 'NEED_CONTEXT') {
+    throw new Error('Generator returned an unsupported status');
+  }
+
   if (result.status === 'NEED_CONTEXT') {
     return {
       status: 'NEED_CONTEXT',
-      missing: result.missing.map((item) => ({ ...item })),
+      missing: validateMissingContexts(result.missing, 'generator.missing'),
     };
+  }
+
+  if (typeof result.draft !== 'string') {
+    throw new Error('Generator DRAFT must contain a string draft');
   }
 
   return {

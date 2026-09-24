@@ -2,8 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  assertBaselineModelEvidence,
   assertBaselineProvenance,
+  assertBaselineStageModels,
   type BaselineProvenanceSnapshot,
+  type BaselineStageModels,
 } from '../baseline-provenance';
 import type { RealEvalManifest } from '../run-manifest';
 
@@ -12,6 +15,10 @@ const current: BaselineProvenanceSnapshot = {
   prompt_template_hashes: {
     compiler: 'prompt-compiler',
     generator: 'prompt-generator',
+  },
+  evaluation_contract_hashes: {
+    judge: 'judge-source',
+    metrics: 'metrics-source',
   },
   source_hashes: {
     'CANON.A': 'source-a',
@@ -28,6 +35,9 @@ function manifest(): RealEvalManifest {
     report_hash: 'report',
     stage_models: {},
     prompt_template_hashes: { ...current.prompt_template_hashes },
+    evaluation_contract_hashes: {
+      ...current.evaluation_contract_hashes,
+    },
     source_hashes: { ...current.source_hashes },
     calls: [],
   };
@@ -83,5 +93,120 @@ test('baseline provenance can pin an exact experiment commit', () => {
   assert.throws(
     () => assertBaselineProvenance(manifest(), current, 'def456'),
     /does not match expected commit/
+  );
+});
+
+
+test('baseline model provenance accepts the configured stage model descriptors', () => {
+  const expected: BaselineStageModels = {
+    compiler: {
+      provider: 'openai',
+      model: 'fixture-model',
+      defaults: { temperature: 0.2 },
+      endpoint_kind: 'official',
+      endpoint_hash: 'a'.repeat(64),
+    },
+  };
+  const value = manifest();
+  value.stage_models = structuredClone(expected);
+
+  assert.doesNotThrow(() => assertBaselineStageModels(value, expected));
+});
+
+test('baseline model provenance rejects a changed model configuration', () => {
+  const expected: BaselineStageModels = {
+    compiler: {
+      provider: 'openai',
+      model: 'fixture-model',
+      defaults: {},
+      endpoint_kind: 'official',
+      endpoint_hash: 'a'.repeat(64),
+    },
+  };
+  const value = manifest();
+  value.stage_models = structuredClone(expected);
+  value.stage_models.compiler!.model = 'different-model';
+
+  assert.throws(
+    () => assertBaselineStageModels(value, expected),
+    /stage_models/
+  );
+});
+
+
+function modelEvidenceManifest(): RealEvalManifest {
+  const value = manifest();
+  const stages = [
+    'retrieval_planner',
+    'compiler',
+    'generator',
+    'validator',
+    'patcher',
+    'eval_judge',
+  ] as const;
+  value.stage_models = Object.fromEntries(
+    stages.map((stage) => [
+      stage,
+      {
+        provider: 'openai',
+        model: 'fixture-alias',
+        defaults: {},
+      },
+    ])
+  );
+  value.calls = [
+    {
+      stage: 'compiler',
+      provider: 'openai',
+      model: 'fixture-snapshot-2026-09-24',
+      requested_model: 'fixture-alias',
+      request_hash: 'a'.repeat(64),
+      response_hash: 'b'.repeat(64),
+      response_format: 'json',
+      latency_ms: 1,
+      request_id: null,
+      response_id: null,
+      usage: null,
+      settings: {
+        temperature: null,
+        top_p: null,
+        max_output_tokens: null,
+        seed: null,
+      },
+    },
+  ];
+  return value;
+}
+
+test('baseline model evidence accepts provider snapshot ids when requested model matches', () => {
+  assert.doesNotThrow(() =>
+    assertBaselineModelEvidence(modelEvidenceManifest())
+  );
+});
+
+test('baseline model evidence rejects requested-model or settings drift', () => {
+  const wrongModel = modelEvidenceManifest();
+  wrongModel.calls[0]!.requested_model = 'other-alias';
+  assert.throws(
+    () => assertBaselineModelEvidence(wrongModel),
+    /requested model differs/
+  );
+
+  const wrongSettings = modelEvidenceManifest();
+  wrongSettings.calls[0]!.settings.temperature = 0.9;
+  assert.throws(
+    () => assertBaselineModelEvidence(wrongSettings),
+    /call settings differ/
+  );
+});
+
+
+test('baseline provenance rejects changed evaluator implementation', () => {
+  const changed = manifest();
+  changed.evaluation_contract_hashes.metrics = 'old-metrics-source';
+
+  assert.throws(
+    () => assertBaselineProvenance(changed, current),
+    /evaluation_contract_hashes/
   );
 });

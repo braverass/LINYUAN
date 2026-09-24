@@ -6,6 +6,7 @@ export type ModelStage =
   | 'generator'
   | 'validator'
   | 'patcher'
+  | 'explain'
   | 'eval_judge';
 
 export interface ModelDefaults {
@@ -46,6 +47,8 @@ export interface ModelClient {
   readonly provider: ModelProvider;
   readonly model: string;
   readonly defaults: ModelDefaults;
+  readonly endpoint_kind?: 'official' | 'custom';
+  readonly endpoint_hash?: string;
   complete(request: ModelRequest): Promise<ModelResponse>;
 }
 
@@ -53,6 +56,7 @@ export interface ModelCallRecord {
   stage: ModelStage;
   provider: ModelProvider;
   model: string;
+  requested_model?: string;
   request_hash: string;
   response_hash: string;
   response_format: 'text' | 'json';

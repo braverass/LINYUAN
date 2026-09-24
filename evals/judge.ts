@@ -1,5 +1,6 @@
 import { stableHash } from '../runtime/trace';
 import { parseJsonObject } from '../runtime/model/json';
+import { validateModelResponse } from '../runtime/model/evidence';
 import type {
   ModelCallRecord,
   ModelClient,
@@ -84,11 +85,13 @@ export async function judgeCase(
 
   const started = Date.now();
   const response = await client.complete(request);
+  validateModelResponse(client, response);
   const result = parseJsonObject<JudgeResult>(response.text);
   const call: ModelCallRecord = {
     stage: 'eval_judge',
     provider: response.provider,
     model: response.model,
+    requested_model: client.model,
     request_hash: stableHash(request),
     response_hash: stableHash(response.text),
     response_format: 'json',

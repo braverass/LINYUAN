@@ -3,6 +3,10 @@ import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 
+import { MODEL_PROMPT_TEMPLATES } from './adapters/model-backed';
+import { officialModelEndpointHash } from './model/providers';
+import { detectGitCommit, trackedGitWorktreeIsClean } from './git';
+import { loadRegistry, resolveRegisteredSourcePath } from './registry';
 import { stableHash } from './trace';
 
 export interface LiveBundleVerificationIssue {
@@ -20,6 +24,10 @@ export interface LiveBundleVerificationReport {
   status: string | null;
   verified_artifacts: string[];
   errors: LiveBundleVerificationIssue[];
+}
+
+export interface VerifyLiveBundleOptions {
+  repoRoot?: string;
 }
 
 type JsonRecord = Record<string, unknown>;
@@ -161,7 +169,8 @@ function validateSettings(
     addIssue(errors, 'CALL_SETTINGS_INVALID', 'Call settings must be an object', 'manifest.json');
     return;
   }
-  for (const key of ['temperature', 'top_p', 'max_output_tokens', 'seed']) {
+
+  for (const key of ['temperature', 'top_p']) {
     if (!hasOwn(settings, key) || !validNullableNumber(settings[key])) {
       addIssue(
         errors,
@@ -170,6 +179,34 @@ function validateSettings(
         'manifest.json'
       );
     }
+  }
+
+  const maxOutputTokens = settings.max_output_tokens;
+  if (
+    !hasOwn(settings, 'max_output_tokens') ||
+    (maxOutputTokens !== null &&
+      (!Number.isSafeInteger(maxOutputTokens) ||
+        (maxOutputTokens as number) < 1))
+  ) {
+    addIssue(
+      errors,
+      'CALL_SETTINGS_INVALID',
+      'Call max_output_tokens must be null or a positive safe integer',
+      'manifest.json'
+    );
+  }
+
+  const seed = settings.seed;
+  if (
+    !hasOwn(settings, 'seed') ||
+    (seed !== null && !Number.isSafeInteger(seed))
+  ) {
+    addIssue(
+      errors,
+      'CALL_SETTINGS_INVALID',
+      'Call seed must be null or a safe integer',
+      'manifest.json'
+    );
   }
 }
 
@@ -189,7 +226,7 @@ function validateModelDefaults(
     return null;
   }
 
-  for (const key of ['temperature', 'topP', 'maxOutputTokens', 'seed']) {
+  for (const key of ['temperature', 'topP']) {
     if (
       hasOwn(defaults, key) &&
       (typeof defaults[key] !== 'number' || !Number.isFinite(defaults[key]))
@@ -201,6 +238,31 @@ function validateModelDefaults(
         'manifest.json'
       );
     }
+  }
+
+  if (
+    hasOwn(defaults, 'maxOutputTokens') &&
+    (!Number.isSafeInteger(defaults.maxOutputTokens) ||
+      (defaults.maxOutputTokens as number) < 1)
+  ) {
+    addIssue(
+      errors,
+      'STAGE_MODEL_DEFAULTS_INVALID',
+      'Stage model default maxOutputTokens must be a positive safe integer',
+      'manifest.json'
+    );
+  }
+
+  if (
+    hasOwn(defaults, 'seed') &&
+    !Number.isSafeInteger(defaults.seed)
+  ) {
+    addIssue(
+      errors,
+      'STAGE_MODEL_DEFAULTS_INVALID',
+      'Stage model default seed must be a safe integer',
+      'manifest.json'
+    );
   }
   return defaults;
 }
@@ -216,8 +278,449 @@ function settingsFromDefaults(defaults: JsonRecord): JsonRecord {
   };
 }
 
+function positiveSafeInteger(value: unknown): boolean {
+  return Number.isSafeInteger(value) && (value as number) >= 1;
+}
+
+function validateErrorCallPrefix(
+  stages: string[],
+  semanticIds: unknown,
+  errors: LiveBundleVerificationIssue[]
+): void {
+  if (stages.length === 0) return;
+
+  if (semanticIds === null && stages[0] !== 'retrieval_planner') {
+    addIssue(
+      errors,
+      'CALL_SEQUENCE_INVALID',
+      'Planner-driven ERROR evidence must begin with retrieval_planner when successful calls exist',
+      'manifest.json'
+    );
+  } else if (Array.isArray(semanticIds) && stages[0] !== 'compiler') {
+    addIssue(
+      errors,
+      'CALL_SEQUENCE_INVALID',
+      'Explicit semantic-id ERROR evidence must begin with compiler when successful calls exist',
+      'manifest.json'
+    );
+  }
+
+  const transitions: Record<string, Set<string>> = {
+    retrieval_planner: new Set(['compiler']),
+    compiler: new Set(['retrieval_planner', 'generator']),
+    generator: new Set(['retrieval_planner', 'validator']),
+    validator: new Set(['patcher']),
+    patcher: new Set(['patcher']),
+  };
+
+  for (let index = 0; index < stages.length - 1; index += 1) {
+    const current = stages[index] as string;
+    const next = stages[index + 1] as string;
+    const allowed = transitions[current];
+    if (!allowed || !allowed.has(next)) {
+      addIssue(
+        errors,
+        'CALL_SEQUENCE_INVALID',
+        'Illegal ERROR call-history transition: ' + current + ' -> ' + next,
+        'manifest.json'
+      );
+    }
+  }
+}
+
+function validateSuccessfulCallSequence(
+  status: string,
+  stages: string[],
+  semanticIds: unknown,
+  errors: LiveBundleVerificationIssue[]
+): void {
+  if (stages.length === 0) return;
+
+  if (semanticIds === null && stages[0] !== 'retrieval_planner') {
+    addIssue(
+      errors,
+      'CALL_SEQUENCE_INVALID',
+      'Planner-driven evidence must begin with retrieval_planner',
+      'manifest.json'
+    );
+  } else if (Array.isArray(semanticIds) && stages[0] !== 'compiler') {
+    addIssue(
+      errors,
+      'CALL_SEQUENCE_INVALID',
+      'Explicit semantic-id evidence must begin with compiler',
+      'manifest.json'
+    );
+  }
+
+  const transitions: Record<string, Set<string>> = {
+    retrieval_planner: new Set(['compiler']),
+    compiler: new Set(['retrieval_planner', 'generator']),
+    generator: new Set(['retrieval_planner', 'validator']),
+    validator: new Set(['patcher']),
+    patcher: new Set(['patcher']),
+  };
+
+  for (let index = 0; index < stages.length - 1; index += 1) {
+    const current = stages[index] as string;
+    const next = stages[index + 1] as string;
+    const allowed = transitions[current];
+    if (!allowed || !allowed.has(next)) {
+      addIssue(
+        errors,
+        'CALL_SEQUENCE_INVALID',
+        'Illegal live call transition: ' + current + ' -> ' + next,
+        'manifest.json'
+      );
+    }
+  }
+
+  const last = stages[stages.length - 1];
+  if (status === 'OUTPUT' && last !== 'validator' && last !== 'patcher') {
+    addIssue(
+      errors,
+      'CALL_SEQUENCE_INVALID',
+      'OUTPUT evidence must end with validator or patcher',
+      'manifest.json'
+    );
+  }
+  if (status === 'CONFLICT' && last !== 'compiler') {
+    addIssue(
+      errors,
+      'CALL_SEQUENCE_INVALID',
+      'CONFLICT evidence must end with compiler',
+      'manifest.json'
+    );
+  }
+  if (status === 'NEED_CONTEXT' && last !== 'retrieval_planner') {
+    addIssue(
+      errors,
+      'CALL_SEQUENCE_INVALID',
+      'NEED_CONTEXT evidence must end with retrieval_planner',
+      'manifest.json'
+    );
+  }
+}
+
+function validateTraceRetrieval(
+  value: unknown,
+  errors: LiveBundleVerificationIssue[]
+): void {
+  if (!Array.isArray(value)) {
+    addIssue(
+      errors,
+      'TRACE_RETRIEVAL_INVALID',
+      'trace.retrieval must be an array',
+      'trace.json'
+    );
+    return;
+  }
+  for (const raw of value) {
+    const item = asRecord(raw);
+    if (!item || !nonEmptyString(item.semantic_id) || !isSha256(item.content_hash)) {
+      addIssue(
+        errors,
+        'TRACE_RETRIEVAL_INVALID',
+        'trace.retrieval entries require a semantic_id and SHA-256 content_hash',
+        'trace.json'
+      );
+    }
+  }
+}
+
+function validateTraceMissing(
+  value: unknown,
+  errors: LiveBundleVerificationIssue[]
+): void {
+  if (!Array.isArray(value)) {
+    addIssue(
+      errors,
+      'TRACE_GENERATOR_NEED_CONTEXT_INVALID',
+      'trace.generator.need_context must be an array',
+      'trace.json'
+    );
+    return;
+  }
+  for (const group of value) {
+    if (!Array.isArray(group)) {
+      addIssue(
+        errors,
+        'TRACE_GENERATOR_NEED_CONTEXT_INVALID',
+        'Each need_context entry must be an array',
+        'trace.json'
+      );
+      continue;
+    }
+    for (const raw of group) {
+      const item = asRecord(raw);
+      if (
+        !item ||
+        !nonEmptyString(item.type) ||
+        !nonEmptyString(item.question) ||
+        (hasOwn(item, 'subject') && !nonEmptyString(item.subject))
+      ) {
+        addIssue(
+          errors,
+          'TRACE_GENERATOR_NEED_CONTEXT_INVALID',
+          'Generator missing-context entries require type/question and optional non-empty subject',
+          'trace.json'
+        );
+      }
+    }
+  }
+}
+
+function validateTraceScope(
+  value: unknown,
+  errors: LiveBundleVerificationIssue[]
+): void {
+  const scope = asRecord(value);
+  if (
+    !scope ||
+    !positiveSafeInteger(scope.paragraph) ||
+    !Array.isArray(scope.sentences) ||
+    scope.sentences.length !== 2 ||
+    !positiveSafeInteger(scope.sentences[0]) ||
+    !positiveSafeInteger(scope.sentences[1]) ||
+    (scope.sentences[1] as number) < (scope.sentences[0] as number)
+  ) {
+    addIssue(
+      errors,
+      'TRACE_PATCH_SCOPE_INVALID',
+      'trace.patcher.scopes contains an invalid patch scope',
+      'trace.json'
+    );
+  }
+}
+
+function validateTracePatchScopeOverlaps(
+  values: unknown[],
+  errors: LiveBundleVerificationIssue[]
+): void {
+  const byParagraph = new Map<number, Array<[number, number]>>();
+  for (const raw of values) {
+    const scope = asRecord(raw);
+    if (
+      !scope ||
+      !positiveSafeInteger(scope.paragraph) ||
+      !Array.isArray(scope.sentences) ||
+      scope.sentences.length !== 2 ||
+      !positiveSafeInteger(scope.sentences[0]) ||
+      !positiveSafeInteger(scope.sentences[1])
+    ) {
+      continue;
+    }
+    const paragraph = scope.paragraph as number;
+    const start = scope.sentences[0] as number;
+    const end = scope.sentences[1] as number;
+    if (end < start) continue;
+
+    const entries = byParagraph.get(paragraph) ?? [];
+    if (
+      entries.some(
+        ([otherStart, otherEnd]) =>
+          start <= otherEnd && otherStart <= end
+      )
+    ) {
+      addIssue(
+        errors,
+        'TRACE_PATCH_SCOPE_OVERLAP',
+        'trace.patcher.scopes contains overlapping patch ranges',
+        'trace.json'
+      );
+      return;
+    }
+    entries.push([start, end]);
+    byParagraph.set(paragraph, entries);
+  }
+}
+
+async function verifyRepositoryBinding(
+  repoRootInput: string,
+  manifest: JsonRecord,
+  runtimeContract: JsonRecord | null,
+  manifestInput: JsonRecord | null,
+  errors: LiveBundleVerificationIssue[]
+): Promise<void> {
+  const repoRoot = path.resolve(repoRootInput);
+  if (!runtimeContract || !manifestInput) {
+    addIssue(
+      errors,
+      'REPO_BINDING_UNAVAILABLE',
+      'Repository-bound verification requires runtime_contract and manifest.input',
+      'manifest.json'
+    );
+    return;
+  }
+
+  const currentCommit = await detectGitCommit(repoRoot, {
+    useEnvironment: false,
+  });
+  if (!isCommitSha(currentCommit)) {
+    addIssue(
+      errors,
+      'REPO_COMMIT_UNAVAILABLE',
+      'Could not resolve the current repository commit',
+      'manifest.json'
+    );
+  } else if (manifest.commit_sha !== currentCommit) {
+    addIssue(
+      errors,
+      'REPO_COMMIT_MISMATCH',
+      'manifest.commit_sha does not match the current repository commit',
+      'manifest.json'
+    );
+  }
+
+  const clean = await trackedGitWorktreeIsClean(repoRoot);
+  if (clean === null) {
+    addIssue(
+      errors,
+      'REPO_WORKTREE_STATUS_UNAVAILABLE',
+      'Could not inspect tracked repository worktree state',
+      'manifest.json'
+    );
+  } else if (!clean) {
+    addIssue(
+      errors,
+      'REPO_WORKTREE_DIRTY',
+      'Repository-bound verification requires no tracked working-tree changes',
+      'manifest.json'
+    );
+  }
+
+  try {
+    const registryPath = path.join(repoRoot, 'SOURCE_REGISTRY.yaml');
+    const registryText = await readFile(registryPath, 'utf8');
+    if (runtimeContract.source_registry_hash !== stableHash(registryText)) {
+      addIssue(
+        errors,
+        'REPO_REGISTRY_HASH_MISMATCH',
+        'runtime_contract.source_registry_hash does not match SOURCE_REGISTRY.yaml',
+        'manifest.json'
+      );
+    }
+
+    const registry = await loadRegistry(registryPath);
+    if (!Array.isArray(manifest.retrieval)) {
+      addIssue(
+        errors,
+        'REPO_RETRIEVAL_BINDING_INVALID',
+        'manifest.retrieval must be an array for repository-bound verification',
+        'manifest.json'
+      );
+    } else {
+      for (const raw of manifest.retrieval) {
+        const item = asRecord(raw);
+        if (!item || !nonEmptyString(item.semantic_id) || !isSha256(item.content_hash)) {
+          continue;
+        }
+        const source = registry.sources[item.semantic_id];
+        if (!source) {
+          addIssue(
+            errors,
+            'REPO_RETRIEVAL_SOURCE_MISSING',
+            'Retrieved semantic ID is absent from SOURCE_REGISTRY.yaml: ' + item.semantic_id,
+            'manifest.json'
+          );
+          continue;
+        }
+        try {
+          const sourcePath = await resolveRegisteredSourcePath(repoRoot, source.path);
+          const content = await readFile(sourcePath, 'utf8');
+          if (item.content_hash !== stableHash(content)) {
+            addIssue(
+              errors,
+              'REPO_RETRIEVAL_HASH_MISMATCH',
+              'Retrieved Canon content hash does not match current repository source: ' +
+                item.semantic_id,
+              'manifest.json'
+            );
+          }
+        } catch (error) {
+          addIssue(
+            errors,
+            'REPO_RETRIEVAL_SOURCE_UNREADABLE',
+            'Cannot verify retrieved source ' +
+              item.semantic_id +
+              ': ' +
+              errorMessage(error),
+            'manifest.json'
+          );
+        }
+      }
+    }
+  } catch (error) {
+    addIssue(
+      errors,
+      'REPO_REGISTRY_UNREADABLE',
+      'Cannot read or parse SOURCE_REGISTRY.yaml: ' + errorMessage(error),
+      'manifest.json'
+    );
+  }
+
+  const promptHashes = asRecord(runtimeContract.prompt_template_hashes);
+  let expectedPromptHashes: Record<string, string> | null = null;
+  try {
+    expectedPromptHashes = {
+      ...Object.fromEntries(
+        Object.entries(MODEL_PROMPT_TEMPLATES).map(([stage, template]) => [
+          stage,
+          stableHash(template),
+        ])
+      ),
+      runtime_adapter_source: stableHash(
+        await readFile(
+          path.join(repoRoot, 'runtime/adapters/model-backed.ts'),
+          'utf8'
+        )
+      ),
+    };
+  } catch (error) {
+    addIssue(
+      errors,
+      'REPO_PROMPT_SOURCE_UNREADABLE',
+      'Cannot read executable prompt source: ' + errorMessage(error),
+      'manifest.json'
+    );
+  }
+  if (
+    !promptHashes ||
+    !expectedPromptHashes ||
+    !isDeepStrictEqual(promptHashes, expectedPromptHashes)
+  ) {
+    addIssue(
+      errors,
+      'REPO_PROMPT_HASH_MISMATCH',
+      'runtime_contract.prompt_template_hashes does not match executable prompt templates/source',
+      'manifest.json'
+    );
+  }
+
+  if (manifestInput.custom_system === false) {
+    try {
+      const system = await readFile(path.join(repoRoot, 'MODE-FICTION.md'), 'utf8');
+      if (runtimeContract.system_hash !== stableHash(system)) {
+        addIssue(
+          errors,
+          'REPO_SYSTEM_HASH_MISMATCH',
+          'runtime_contract.system_hash does not match MODE-FICTION.md',
+          'manifest.json'
+        );
+      }
+    } catch (error) {
+      addIssue(
+        errors,
+        'REPO_SYSTEM_UNREADABLE',
+        'Cannot read MODE-FICTION.md: ' + errorMessage(error),
+        'manifest.json'
+      );
+    }
+  }
+}
+
 export async function verifyLiveFictionBundle(
-  runDirInput: string
+  runDirInput: string,
+  options: VerifyLiveBundleOptions = {}
 ): Promise<LiveBundleVerificationReport> {
   const runDir = path.resolve(runDirInput);
   const errors: LiveBundleVerificationIssue[] = [];
@@ -504,6 +1007,54 @@ export async function verifyLiveFictionBundle(
       'Non-error manifest.runtime_contract must be an object',
       'manifest.json'
     );
+  } else if (status && status !== 'ERROR' && runtimeContract) {
+    if (!isSha256(runtimeContract.system_hash)) {
+      addIssue(
+        errors,
+        'RUNTIME_SYSTEM_HASH_INVALID',
+        'runtime_contract.system_hash must be a SHA-256 value',
+        'manifest.json'
+      );
+    }
+    if (!isSha256(runtimeContract.source_registry_hash)) {
+      addIssue(
+        errors,
+        'RUNTIME_REGISTRY_HASH_INVALID',
+        'runtime_contract.source_registry_hash must be a SHA-256 value',
+        'manifest.json'
+      );
+    }
+    const promptHashes = asRecord(runtimeContract.prompt_template_hashes);
+    if (!promptHashes) {
+      addIssue(
+        errors,
+        'RUNTIME_PROMPT_HASHES_INVALID',
+        'runtime_contract.prompt_template_hashes must be an object',
+        'manifest.json'
+      );
+    } else {
+      for (const stage of LIVE_STAGES) {
+        if (!isSha256(promptHashes[stage])) {
+          addIssue(
+            errors,
+            'RUNTIME_PROMPT_HASHES_INVALID',
+            'Missing or invalid prompt-template hash for ' + stage,
+            'manifest.json'
+          );
+        }
+      }
+      if (
+        hasOwn(promptHashes, 'runtime_adapter_source') &&
+        !isSha256(promptHashes.runtime_adapter_source)
+      ) {
+        addIssue(
+          errors,
+          'RUNTIME_PROMPT_HASHES_INVALID',
+          'runtime_adapter_source must be a SHA-256 value when present',
+          'manifest.json'
+        );
+      }
+    }
   }
 
   const manifestInput = asRecord(manifest.input);
@@ -562,6 +1113,15 @@ export async function verifyLiveFictionBundle(
 
 
     if (status && status !== 'ERROR') {
+      if (typeof input.request !== 'string' || input.request.trim().length === 0) {
+        addIssue(
+          errors,
+          'INPUT_REQUEST_INVALID',
+          'Successful input.request must be a non-empty string',
+          'input.json'
+        );
+      }
+
       if (
         !Number.isSafeInteger(input.max_context_rounds) ||
         (input.max_context_rounds as number) < 1
@@ -602,6 +1162,7 @@ export async function verifyLiveFictionBundle(
       if (
         customSystem &&
         (typeof input.system_override !== 'string' ||
+          input.system_override.trim().length === 0 ||
           !runtimeContract ||
           runtimeContract.system_hash !== stableHash(input.system_override))
       ) {
@@ -619,6 +1180,20 @@ export async function verifyLiveFictionBundle(
       'INPUT_STRUCTURE_INVALID',
       'input.json and manifest.input must both be JSON objects',
       'input.json'
+    );
+  }
+
+  if (
+    options.repoRoot &&
+    status &&
+    status !== 'ERROR'
+  ) {
+    await verifyRepositoryBinding(
+      options.repoRoot,
+      manifest,
+      runtimeContract,
+      manifestInput,
+      errors
     );
   }
 
@@ -679,6 +1254,62 @@ export async function verifyLiveFictionBundle(
       }
       if (descriptor) {
         validateModelDefaults(descriptor.defaults, errors, stage);
+        const hasEndpointKind = hasOwn(descriptor, 'endpoint_kind');
+        const hasEndpointHash = hasOwn(descriptor, 'endpoint_hash');
+        if (hasEndpointKind !== hasEndpointHash) {
+          addIssue(
+            errors,
+            'STAGE_MODEL_ENDPOINT_INVALID',
+            'Stage endpoint_kind and endpoint_hash must be recorded together',
+            'manifest.json'
+          );
+        } else if (hasEndpointKind) {
+          if (
+            descriptor.endpoint_kind !== 'official' &&
+            descriptor.endpoint_kind !== 'custom'
+          ) {
+            addIssue(
+              errors,
+              'STAGE_MODEL_ENDPOINT_INVALID',
+              'Stage endpoint_kind must be official or custom',
+              'manifest.json'
+            );
+          }
+          if (!isSha256(descriptor.endpoint_hash)) {
+            addIssue(
+              errors,
+              'STAGE_MODEL_ENDPOINT_INVALID',
+              'Stage endpoint_hash must be a SHA-256 value',
+              'manifest.json'
+            );
+          } else if (LIVE_PROVIDERS.has(String(descriptor.provider))) {
+            const officialHash = officialModelEndpointHash(
+              descriptor.provider as 'openai' | 'gemini' | 'anthropic'
+            );
+            if (
+              descriptor.endpoint_kind === 'official' &&
+              descriptor.endpoint_hash !== officialHash
+            ) {
+              addIssue(
+                errors,
+                'STAGE_MODEL_ENDPOINT_INVALID',
+                'Official endpoint hash does not match the provider runtime contract',
+                'manifest.json'
+              );
+            }
+            if (
+              descriptor.endpoint_kind === 'custom' &&
+              descriptor.endpoint_hash === officialHash
+            ) {
+              addIssue(
+                errors,
+                'STAGE_MODEL_ENDPOINT_INVALID',
+                'Custom endpoint metadata resolves to the official provider endpoint',
+                'manifest.json'
+              );
+            }
+          }
+        }
       }
     }
 
@@ -800,16 +1431,36 @@ export async function verifyLiveFictionBundle(
           'No stage model descriptor for call stage ' + call.stage,
           'manifest.json'
         );
-      } else if (
-        descriptor &&
-        (call.provider !== descriptor.provider || call.model !== descriptor.model)
-      ) {
+      } else if (descriptor && call.provider !== descriptor.provider) {
         addIssue(
           errors,
-          'CALL_STAGE_MODEL_MISMATCH',
-          'Call provider/model differs from the stage model descriptor',
+          'CALL_STAGE_PROVIDER_MISMATCH',
+          'Call provider differs from the stage model descriptor',
           'manifest.json'
         );
+      }
+
+      if (descriptor) {
+        if (hasOwn(call, 'requested_model')) {
+          if (
+            !nonEmptyString(call.requested_model) ||
+            call.requested_model !== descriptor.model
+          ) {
+            addIssue(
+              errors,
+              'CALL_REQUESTED_MODEL_MISMATCH',
+              'Call requested_model differs from the configured stage model',
+              'manifest.json'
+            );
+          }
+        } else if (call.model !== descriptor.model) {
+          addIssue(
+            errors,
+            'CALL_STAGE_MODEL_MISMATCH',
+            'Legacy call model differs from the configured stage model',
+            'manifest.json'
+          );
+        }
       }
 
       if (descriptor) {
@@ -861,37 +1512,40 @@ export async function verifyLiveFictionBundle(
       }
     }
 
-    if (status === 'OUTPUT') {
-      const firstCompiler = callStages.indexOf('compiler');
-      const firstGenerator = callStages.indexOf('generator');
-      const lastGenerator = callStages.lastIndexOf('generator');
-      const firstValidator = callStages.indexOf('validator');
-      const firstPatcher = callStages.indexOf('patcher');
+    if (status === 'ERROR') {
+      validateErrorCallPrefix(
+        callStages,
+        manifestInput?.semantic_ids,
+        errors
+      );
+    }
 
-      if (
-        firstCompiler < 0 ||
-        firstGenerator < 0 ||
-        firstValidator < 0 ||
-        firstCompiler > firstGenerator ||
-        lastGenerator > firstValidator ||
-        (firstPatcher >= 0 && firstPatcher < firstValidator)
-      ) {
+    if (status && status !== 'ERROR') {
+      validateSuccessfulCallSequence(
+        status,
+        callStages,
+        manifestInput?.semantic_ids,
+        errors
+      );
+
+      const validatorCount = callStageCounts.get('validator') ?? 0;
+      const patcherCount = callStageCounts.get('patcher') ?? 0;
+      if (status === 'OUTPUT' && validatorCount !== 1) {
         addIssue(
           errors,
-          'CALL_SEQUENCE_INVALID',
-          'OUTPUT call order must preserve compiler -> generator -> validator -> patcher causality',
+          'CALL_STAGE_COUNT_INVALID',
+          'OUTPUT evidence requires exactly one validator call',
           'manifest.json'
         );
       }
-
       if (
-        manifestInput?.semantic_ids === null &&
-        callStages[0] !== 'retrieval_planner'
+        (status === 'NEED_CONTEXT' || status === 'CONFLICT') &&
+        (validatorCount !== 0 || patcherCount !== 0)
       ) {
         addIssue(
           errors,
-          'CALL_SEQUENCE_INVALID',
-          'Planner-driven OUTPUT evidence must begin with retrieval_planner',
+          'CALL_STAGE_FORBIDDEN',
+          status + ' evidence may not contain validator or patcher calls',
           'manifest.json'
         );
       }
@@ -899,13 +1553,28 @@ export async function verifyLiveFictionBundle(
   }
 
   if (status === 'ERROR') {
-    if (manifest.failure === null || asRecord(manifest.failure) === null) {
+    const failureRecord = asRecord(manifest.failure);
+    if (!failureRecord) {
       addIssue(
         errors,
         'FAILURE_MISSING',
         'ERROR manifest must contain structured failure metadata',
         'manifest.json'
       );
+    } else {
+      const keys = Object.keys(failureRecord).sort();
+      if (
+        !isDeepStrictEqual(keys, ['message', 'name']) ||
+        !nonEmptyString(failureRecord.name) ||
+        typeof failureRecord.message !== 'string'
+      ) {
+        addIssue(
+          errors,
+          'FAILURE_INVALID',
+          'ERROR failure metadata must contain exactly non-empty name and string message',
+          'manifest.json'
+        );
+      }
     }
     const failureValue = artifactMetadata.has('failure.json')
       ? await readJsonArtifact(runDir, 'failure.json', errors)
@@ -936,6 +1605,16 @@ export async function verifyLiveFictionBundle(
       : null;
     const trace = asRecord(traceValue);
     if (trace) {
+      if (trace.version !== '0.5') {
+        addIssue(
+          errors,
+          'TRACE_VERSION_INVALID',
+          'trace.version must be 0.5',
+          'trace.json'
+        );
+      }
+      validateTraceRetrieval(trace.retrieval, errors);
+
       if (trace.run_id !== manifest.runtime_run_id) {
         addIssue(
           errors,
@@ -953,7 +1632,39 @@ export async function verifyLiveFictionBundle(
         );
       }
 
+      const compilerTrace = asRecord(trace.compiler);
+      if (
+        !compilerTrace ||
+        !Array.isArray(compilerTrace.active_context_hashes) ||
+        !Array.isArray(compilerTrace.provenance)
+      ) {
+        addIssue(
+          errors,
+          'TRACE_COMPILER_INVALID',
+          'trace.compiler must contain active_context_hashes and provenance arrays',
+          'trace.json'
+        );
+      } else {
+        if (compilerTrace.active_context_hashes.some((hash) => !isSha256(hash))) {
+          addIssue(
+            errors,
+            'TRACE_COMPILER_HASH_INVALID',
+            'trace.compiler.active_context_hashes must contain SHA-256 values',
+            'trace.json'
+          );
+        }
+        if (compilerTrace.provenance.some((item) => asRecord(item) === null)) {
+          addIssue(
+            errors,
+            'TRACE_COMPILER_PROVENANCE_INVALID',
+            'trace.compiler.provenance must contain objects',
+            'trace.json'
+          );
+        }
+      }
+
       const generatorTrace = asRecord(trace.generator);
+      let generatorCount: unknown = null;
       if (!generatorTrace) {
         addIssue(
           errors,
@@ -962,7 +1673,7 @@ export async function verifyLiveFictionBundle(
           'trace.json'
         );
       } else {
-        const generatorCount = generatorTrace.call_count;
+        generatorCount = generatorTrace.call_count;
         if (
           !Number.isSafeInteger(generatorCount) ||
           (generatorCount as number) < 0
@@ -985,31 +1696,138 @@ export async function verifyLiveFictionBundle(
           );
         }
 
+        if (!Array.isArray(generatorTrace.payload_hashes)) {
+          addIssue(
+            errors,
+            'TRACE_GENERATOR_PAYLOAD_INVALID',
+            'trace.generator.payload_hashes must be an array',
+            'trace.json'
+          );
+        } else {
+          if (generatorTrace.payload_hashes.some((hash) => !isSha256(hash))) {
+            addIssue(
+              errors,
+              'TRACE_GENERATOR_PAYLOAD_INVALID',
+              'trace.generator.payload_hashes must contain SHA-256 values',
+              'trace.json'
+            );
+          }
+          if (
+            Number.isSafeInteger(generatorCount) &&
+            generatorTrace.payload_hashes.length !== generatorCount
+          ) {
+            addIssue(
+              errors,
+              'TRACE_GENERATOR_PAYLOAD_COUNT_MISMATCH',
+              'trace.generator.payload_hashes length does not match call_count',
+              'trace.json'
+            );
+          }
+        }
+        validateTraceMissing(generatorTrace.need_context, errors);
+      }
+
+      if (
+        compilerTrace &&
+        Array.isArray(compilerTrace.active_context_hashes) &&
+        Array.isArray(compilerTrace.provenance) &&
+        Number.isSafeInteger(generatorCount)
+      ) {
         if (
-          Array.isArray(generatorTrace.payload_hashes) &&
-          Number.isSafeInteger(generatorCount) &&
-          generatorTrace.payload_hashes.length !== generatorCount
+          compilerTrace.active_context_hashes.length !== generatorCount ||
+          compilerTrace.provenance.length !== generatorCount
         ) {
           addIssue(
             errors,
-            'TRACE_GENERATOR_PAYLOAD_COUNT_MISMATCH',
-            'trace.generator.payload_hashes length does not match call_count',
+            'TRACE_COMPILER_READY_COUNT_MISMATCH',
+            'Each READY compiler result must correspond to one generator call',
             'trace.json'
           );
         }
       }
 
+      const validatorTrace = asRecord(trace.validator);
+      const validatorViolations =
+        validatorTrace && Array.isArray(validatorTrace.violations)
+          ? validatorTrace.violations
+          : null;
+      if (!validatorViolations) {
+        addIssue(
+          errors,
+          'TRACE_VALIDATOR_INVALID',
+          'trace.validator.violations must be an array',
+          'trace.json'
+        );
+      } else {
+        for (const rawViolation of validatorViolations) {
+          const violation = asRecord(rawViolation);
+          if (
+            !violation ||
+            !nonEmptyString(violation.id) ||
+            (violation.severity !== 'hard' && violation.severity !== 'soft') ||
+            !Array.isArray(violation.evidence_refs) ||
+            violation.evidence_refs.some((ref) => typeof ref !== 'string')
+          ) {
+            addIssue(
+              errors,
+              'TRACE_VALIDATOR_INVALID',
+              'trace.validator.violations contains an invalid entry',
+              'trace.json'
+            );
+          }
+        }
+      }
+
       const patcherTrace = asRecord(trace.patcher);
+      const patchScopes =
+        patcherTrace && Array.isArray(patcherTrace.scopes)
+          ? patcherTrace.scopes
+          : null;
+      if (!patchScopes) {
+        addIssue(
+          errors,
+          'TRACE_PATCHER_INVALID',
+          'trace.patcher.scopes must be an array',
+          'trace.json'
+        );
+      } else {
+        for (const scope of patchScopes) {
+          validateTraceScope(scope, errors);
+        }
+        validateTracePatchScopeOverlaps(patchScopes, errors);
+        if (
+          manifestCalls &&
+          patchScopes.length !== (callStageCounts.get('patcher') ?? 0)
+        ) {
+          addIssue(
+            errors,
+            'TRACE_PATCHER_CALL_COUNT_MISMATCH',
+            'trace.patcher.scopes length does not match patcher call evidence',
+            'trace.json'
+          );
+        }
+        if (
+          validatorViolations &&
+          patchScopes.length !== validatorViolations.length
+        ) {
+          addIssue(
+            errors,
+            'TRACE_PATCHER_VIOLATION_COUNT_MISMATCH',
+            'Each validator violation must correspond to exactly one patch scope',
+            'trace.json'
+          );
+        }
+      }
+
       if (
-        patcherTrace &&
-        Array.isArray(patcherTrace.scopes) &&
-        manifestCalls &&
-        patcherTrace.scopes.length !== (callStageCounts.get('patcher') ?? 0)
+        (status === 'NEED_CONTEXT' || status === 'CONFLICT') &&
+        ((validatorViolations?.length ?? 0) !== 0 ||
+          (patchScopes?.length ?? 0) !== 0)
       ) {
         addIssue(
           errors,
-          'TRACE_PATCHER_CALL_COUNT_MISMATCH',
-          'trace.patcher.scopes length does not match patcher call evidence',
+          'TRACE_STATUS_CAUSALITY_INVALID',
+          status + ' trace may not contain validation or patch activity',
           'trace.json'
         );
       }

@@ -1,8 +1,9 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { loadRegistry } from '../runtime/registry';
+import { loadRegistry, resolveRegisteredSourcePath } from '../runtime/registry';
 import { stableHash } from '../runtime/trace';
+import { detectGitCommit } from '../runtime/git';
 import {
   MODEL_PROMPT_TEMPLATES,
   type RuntimeModelClients,
@@ -13,6 +14,14 @@ import type {
   ModelDefaults,
 } from '../runtime/model/types';
 import type { EvalCase, EvalSuiteReport } from './types';
+
+export const EVALUATION_CONTRACT_FILES = {
+  judge: 'evals/judge.ts',
+  metrics: 'evals/metrics.ts',
+  candidate_boundary: 'evals/candidate-boundary.ts',
+  real_executor: 'evals/real-executor.ts',
+  patch_locality: 'evals/patch-locality.ts',
+} as const;
 
 export interface RealEvalManifest {
   version: '0.7';
@@ -26,27 +35,14 @@ export interface RealEvalManifest {
       provider: string;
       model: string;
       defaults: ModelDefaults;
+      endpoint_kind?: 'official' | 'custom';
+      endpoint_hash?: string;
     }
   >;
   prompt_template_hashes: Record<string, string>;
+  evaluation_contract_hashes: Record<string, string>;
   source_hashes: Record<string, string>;
   calls: ModelCallRecord[];
-}
-
-async function detectGitCommit(repoRoot: string): Promise<string> {
-  if (process.env.GITHUB_SHA) return process.env.GITHUB_SHA;
-  if (process.env.LINYUAN_COMMIT) return process.env.LINYUAN_COMMIT;
-
-  try {
-    const head = (await readFile(path.join(repoRoot, '.git/HEAD'), 'utf8')).trim();
-    if (!head.startsWith('ref: ')) return head;
-    const refPath = head.slice(5).trim();
-    return (
-      await readFile(path.join(repoRoot, '.git', refPath), 'utf8')
-    ).trim();
-  } catch {
-    return 'UNKNOWN';
-  }
 }
 
 function descriptor(client: ModelClient) {
@@ -54,7 +50,26 @@ function descriptor(client: ModelClient) {
     provider: client.provider,
     model: client.model,
     defaults: structuredClone(client.defaults),
+    ...(client.endpoint_kind !== undefined
+      ? { endpoint_kind: client.endpoint_kind }
+      : {}),
+    ...(client.endpoint_hash !== undefined
+      ? { endpoint_hash: client.endpoint_hash }
+      : {}),
   };
+}
+
+async function evaluationContractHashes(
+  repoRoot: string
+): Promise<Record<string, string>> {
+  return Object.fromEntries(
+    await Promise.all(
+      Object.entries(EVALUATION_CONTRACT_FILES).map(async ([key, file]) => [
+        key,
+        stableHash(await readFile(path.join(repoRoot, file), 'utf8')),
+      ])
+    )
+  );
 }
 
 async function sourceHashes(
@@ -63,7 +78,8 @@ async function sourceHashes(
   const registry = await loadRegistry(path.join(repoRoot, 'SOURCE_REGISTRY.yaml'));
   const hashes: Record<string, string> = {};
   for (const [semanticId, source] of Object.entries(registry.sources)) {
-    const content = await readFile(path.join(repoRoot, source.path), 'utf8');
+    const sourcePath = await resolveRegisteredSourcePath(repoRoot, source.path);
+    const content = await readFile(sourcePath, 'utf8');
     hashes[semanticId] = stableHash(content);
   }
   return hashes;
@@ -92,12 +108,24 @@ export async function buildRealEvalManifest(input: {
       patcher: descriptor(input.clients.patcher),
       eval_judge: descriptor(input.judgeClient),
     },
-    prompt_template_hashes: Object.fromEntries(
-      Object.entries(MODEL_PROMPT_TEMPLATES).map(([key, value]) => [
-        key,
-        stableHash(value),
-      ])
-    ),
+    prompt_template_hashes: {
+      ...Object.fromEntries(
+        Object.entries(MODEL_PROMPT_TEMPLATES).map(([key, value]) => [
+          key,
+          stableHash(value),
+        ])
+      ),
+      runtime_adapter_source: stableHash(
+        await readFile(
+          path.join(repoRoot, 'runtime/adapters/model-backed.ts'),
+          'utf8'
+        )
+      ),
+      mode_fiction: stableHash(
+        await readFile(path.join(repoRoot, 'MODE-FICTION.md'), 'utf8')
+      ),
+    },
+    evaluation_contract_hashes: await evaluationContractHashes(repoRoot),
     source_hashes: await sourceHashes(repoRoot),
     calls: input.calls.map((call) => structuredClone(call)),
   };

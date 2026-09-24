@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import type {
   ModelClient,
   ModelDefaults,
@@ -15,6 +17,14 @@ export interface ProviderConfig {
   defaults?: ModelDefaults;
 }
 
+export interface ModelEnvironmentDescriptor {
+  provider: ModelProvider;
+  model: string;
+  defaults: ModelDefaults;
+  endpoint_kind: 'official' | 'custom';
+  endpoint_hash: string;
+}
+
 function numberFromEnv(value: string | undefined): number | undefined {
   if (value === undefined || value.trim() === '') return undefined;
   const parsed = Number(value);
@@ -25,7 +35,58 @@ function numberFromEnv(value: string | undefined): number | undefined {
 }
 
 function cleanBaseUrl(value: string): string {
-  return value.replace(/\/+$/, '');
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error('Model base URL must be an absolute HTTP(S) URL');
+  }
+
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    throw new Error('Model base URL must use http or https');
+  }
+  if (parsed.username || parsed.password) {
+    throw new Error('Model base URL must not contain URL credentials');
+  }
+  if (parsed.search || parsed.hash) {
+    throw new Error('Model base URL must not contain query or fragment data');
+  }
+
+  const pathname = parsed.pathname.replace(/\/+$/, '');
+  return parsed.origin + (pathname === '/' ? '' : pathname);
+}
+
+function endpointHash(value: string): string {
+  return createHash('sha256').update(value).digest('hex');
+}
+
+function officialBaseUrl(provider: ModelProvider): string {
+  if (provider === 'openai') return 'https://api.openai.com/v1';
+  if (provider === 'gemini') {
+    return 'https://generativelanguage.googleapis.com/v1beta';
+  }
+  return 'https://api.anthropic.com';
+}
+
+export function officialModelEndpointHash(provider: ModelProvider): string {
+  return endpointHash(officialBaseUrl(provider));
+}
+
+function resolveModelEndpoint(
+  provider: ModelProvider,
+  configuredBaseUrl?: string
+): {
+  baseUrl: string;
+  endpoint_kind: 'official' | 'custom';
+  endpoint_hash: string;
+} {
+  const official = officialBaseUrl(provider);
+  const baseUrl = cleanBaseUrl(configuredBaseUrl ?? official);
+  return {
+    baseUrl,
+    endpoint_kind: baseUrl === official ? 'official' : 'custom',
+    endpoint_hash: endpointHash(baseUrl),
+  };
 }
 
 function sanitizeProviderErrorDetail(
@@ -115,10 +176,57 @@ function usageObject(
   totalTokens: unknown
 ): ModelUsage | undefined {
   const usage: ModelUsage = {};
-  if (typeof inputTokens === 'number') usage.inputTokens = inputTokens;
-  if (typeof outputTokens === 'number') usage.outputTokens = outputTokens;
-  if (typeof totalTokens === 'number') usage.totalTokens = totalTokens;
+  for (const [key, raw] of [
+    ['inputTokens', inputTokens],
+    ['outputTokens', outputTokens],
+    ['totalTokens', totalTokens],
+  ] as const) {
+    if (raw === undefined) continue;
+    if (!Number.isSafeInteger(raw) || (raw as number) < 0) {
+      throw new Error(
+        'Model API response contains invalid token usage for ' + key
+      );
+    }
+    usage[key] = raw as number;
+  }
   return Object.keys(usage).length === 0 ? undefined : usage;
+}
+
+function effectiveProviderDefaults(
+  provider: ModelProvider,
+  configured: ModelDefaults
+): ModelDefaults {
+  const defaults: ModelDefaults = { ...configured };
+  if (provider === 'anthropic' && defaults.maxOutputTokens === undefined) {
+    defaults.maxOutputTokens = 4096;
+  }
+  return defaults;
+}
+
+function validateModelSettings(settings: ModelDefaults): void {
+  for (const [name, value] of [
+    ['temperature', settings.temperature],
+    ['topP', settings.topP],
+  ] as const) {
+    if (value !== undefined && !Number.isFinite(value)) {
+      throw new Error(name + ' must be a finite number');
+    }
+  }
+
+  if (
+    settings.maxOutputTokens !== undefined &&
+    (!Number.isSafeInteger(settings.maxOutputTokens) ||
+      settings.maxOutputTokens < 1)
+  ) {
+    throw new Error('maxOutputTokens must be a positive safe integer');
+  }
+
+  if (
+    settings.seed !== undefined &&
+    !Number.isSafeInteger(settings.seed)
+  ) {
+    throw new Error('seed must be a safe integer');
+  }
 }
 
 function mergedDefaults(
@@ -132,6 +240,7 @@ function mergedDefaults(
     merged.maxOutputTokens = request.maxOutputTokens;
   }
   if (request.seed !== undefined) merged.seed = request.seed;
+  validateModelSettings(merged);
   return merged;
 }
 
@@ -154,10 +263,13 @@ function openAIText(data: Record<string, unknown>): string {
 }
 
 function createOpenAIClient(config: ProviderConfig): ModelClient {
-  const defaults = config.defaults ?? {};
-  const baseUrl = cleanBaseUrl(config.baseUrl ?? 'https://api.openai.com/v1');
+  const defaults = effectiveProviderDefaults('openai', config.defaults ?? {});
+  const endpoint = resolveModelEndpoint('openai', config.baseUrl);
+  const baseUrl = endpoint.baseUrl;
 
   return {
+    endpoint_kind: endpoint.endpoint_kind,
+    endpoint_hash: endpoint.endpoint_hash,
     provider: 'openai',
     model: config.model,
     defaults,
@@ -218,12 +330,13 @@ function createOpenAIClient(config: ProviderConfig): ModelClient {
 }
 
 function createGeminiClient(config: ProviderConfig): ModelClient {
-  const defaults = config.defaults ?? {};
-  const baseUrl = cleanBaseUrl(
-    config.baseUrl ?? 'https://generativelanguage.googleapis.com/v1beta'
-  );
+  const defaults = effectiveProviderDefaults('gemini', config.defaults ?? {});
+  const endpoint = resolveModelEndpoint('gemini', config.baseUrl);
+  const baseUrl = endpoint.baseUrl;
 
   return {
+    endpoint_kind: endpoint.endpoint_kind,
+    endpoint_hash: endpoint.endpoint_hash,
     provider: 'gemini',
     model: config.model,
     defaults,
@@ -314,10 +427,13 @@ function createGeminiClient(config: ProviderConfig): ModelClient {
 }
 
 function createAnthropicClient(config: ProviderConfig): ModelClient {
-  const defaults = config.defaults ?? {};
-  const baseUrl = cleanBaseUrl(config.baseUrl ?? 'https://api.anthropic.com');
+  const defaults = effectiveProviderDefaults('anthropic', config.defaults ?? {});
+  const endpoint = resolveModelEndpoint('anthropic', config.baseUrl);
+  const baseUrl = endpoint.baseUrl;
 
   return {
+    endpoint_kind: endpoint.endpoint_kind,
+    endpoint_hash: endpoint.endpoint_hash,
     provider: 'anthropic',
     model: config.model,
     defaults,
@@ -383,6 +499,7 @@ function createAnthropicClient(config: ProviderConfig): ModelClient {
 }
 
 export function createModelClient(config: ProviderConfig): ModelClient {
+  validateModelSettings(config.defaults ?? {});
   if (config.provider === 'openai') return createOpenAIClient(config);
   if (config.provider === 'gemini') return createGeminiClient(config);
   return createAnthropicClient(config);
@@ -394,12 +511,18 @@ function providerKey(provider: ModelProvider): string | undefined {
   return process.env.ANTHROPIC_API_KEY;
 }
 
-export function createModelClientFromEnv(stage: string): ModelClient {
+export function modelDescriptorFromEnv(
+  stage: string
+): ModelEnvironmentDescriptor | null {
   const prefix = 'LINYUAN_' + stage.toUpperCase() + '_';
   const providerRaw =
     process.env[prefix + 'PROVIDER'] ?? process.env.LINYUAN_MODEL_PROVIDER;
   const model =
     process.env[prefix + 'MODEL'] ?? process.env.LINYUAN_MODEL_ID;
+
+  if (providerRaw === undefined && model === undefined) {
+    return null;
+  }
 
   if (
     providerRaw !== 'openai' &&
@@ -413,14 +536,6 @@ export function createModelClientFromEnv(stage: string): ModelClient {
   }
   if (!model) {
     throw new Error(prefix + 'MODEL or LINYUAN_MODEL_ID is required');
-  }
-
-  const apiKey =
-    process.env[prefix + 'API_KEY'] ??
-    process.env.LINYUAN_MODEL_API_KEY ??
-    providerKey(providerRaw);
-  if (!apiKey) {
-    throw new Error('No API key configured for provider ' + providerRaw);
   }
 
   const defaults: ModelDefaults = {};
@@ -441,14 +556,47 @@ export function createModelClientFromEnv(stage: string): ModelClient {
   if (topP !== undefined) defaults.topP = topP;
   if (maxOutputTokens !== undefined) defaults.maxOutputTokens = maxOutputTokens;
   if (seed !== undefined) defaults.seed = seed;
+  const effectiveDefaults = effectiveProviderDefaults(providerRaw, defaults);
+  validateModelSettings(effectiveDefaults);
+
+  const baseUrl =
+    process.env[prefix + 'BASE_URL'] ?? process.env.LINYUAN_MODEL_BASE_URL;
+  const endpoint = resolveModelEndpoint(providerRaw, baseUrl);
+
+  return {
+    provider: providerRaw,
+    model,
+    defaults: effectiveDefaults,
+    endpoint_kind: endpoint.endpoint_kind,
+    endpoint_hash: endpoint.endpoint_hash,
+  };
+}
+
+export function createModelClientFromEnv(stage: string): ModelClient {
+  const prefix = 'LINYUAN_' + stage.toUpperCase() + '_';
+  const descriptor = modelDescriptorFromEnv(stage);
+  if (!descriptor) {
+    throw new Error(
+      prefix +
+        'PROVIDER/MODEL or LINYUAN_MODEL_PROVIDER/LINYUAN_MODEL_ID is required'
+    );
+  }
+
+  const apiKey =
+    process.env[prefix + 'API_KEY'] ??
+    process.env.LINYUAN_MODEL_API_KEY ??
+    providerKey(descriptor.provider);
+  if (!apiKey) {
+    throw new Error('No API key configured for provider ' + descriptor.provider);
+  }
 
   const baseUrl =
     process.env[prefix + 'BASE_URL'] ?? process.env.LINYUAN_MODEL_BASE_URL;
   const config: ProviderConfig = {
-    provider: providerRaw,
-    model,
+    provider: descriptor.provider,
+    model: descriptor.model,
     apiKey,
-    defaults,
+    defaults: descriptor.defaults,
   };
   if (baseUrl) config.baseUrl = baseUrl;
   return createModelClient(config);

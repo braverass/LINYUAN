@@ -113,6 +113,27 @@ function sortViolationsForLocalPatching(violations: Violation[]): Violation[] {
   });
 }
 
+function assertNonOverlappingPatchScopes(violations: Violation[]): void {
+  const byParagraph = new Map<number, Array<[number, number, string]>>();
+  for (const violation of violations) {
+    const scope = violation.patch_contract.allowed_scope;
+    const entries = byParagraph.get(scope.paragraph) ?? [];
+    const [start, end] = scope.sentences;
+    for (const [otherStart, otherEnd, otherId] of entries) {
+      if (start <= otherEnd && otherStart <= end) {
+        throw new Error(
+          'Validator returned overlapping patch scopes: ' +
+            otherId +
+            ' and ' +
+            violation.id
+        );
+      }
+    }
+    entries.push([start, end, violation.id]);
+    byParagraph.set(scope.paragraph, entries);
+  }
+}
+
 export async function runFiction(
   input: FictionRunInput,
   adapters: RuntimeAdapters
@@ -221,6 +242,8 @@ export async function runFiction(
         provenance: structuredClone(provenance),
       },
     });
+
+    assertNonOverlappingPatchScopes(violations);
 
     trace.validator.violations = violations.map((violation) => ({
       id: violation.id,

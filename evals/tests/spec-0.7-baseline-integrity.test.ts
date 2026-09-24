@@ -34,6 +34,7 @@ function manifestFor(value: EvalSuiteReport): RealEvalManifest {
     report_hash: stableHash(value),
     stage_models: {},
     prompt_template_hashes: {},
+    evaluation_contract_hashes: {},
     source_hashes: {},
     calls: [],
   };

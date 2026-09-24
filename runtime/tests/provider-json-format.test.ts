@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createModelClient } from '../model/providers';
+import { createModelClient, modelDescriptorFromEnv } from '../model/providers';
 
 test('OpenAI Responses requests JSON mode for structured runtime stages', async () => {
   const originalFetch = globalThis.fetch;
@@ -453,5 +453,244 @@ test('unsupported seed settings are rejected rather than recorded as if applied'
     assert.equal(fetchCalls, 0);
   } finally {
     globalThis.fetch = originalFetch;
+  }
+});
+
+
+test('model settings reject invalid token limits and non-integer seeds before fetch', async () => {
+  assert.throws(
+    () =>
+      createModelClient({
+        provider: 'openai',
+        model: 'fixture',
+        apiKey: 'key',
+        defaults: { maxOutputTokens: 0 },
+      }),
+    /maxOutputTokens must be a positive safe integer/
+  );
+
+  assert.throws(
+    () =>
+      createModelClient({
+        provider: 'gemini',
+        model: 'fixture',
+        apiKey: 'key',
+        defaults: { seed: 1.5 },
+      }),
+    /seed must be a safe integer/
+  );
+
+  const originalFetch = globalThis.fetch;
+  let fetchCalls = 0;
+  globalThis.fetch = async () => {
+    fetchCalls += 1;
+    throw new Error('fetch should not be reached');
+  };
+
+  try {
+    const client = createModelClient({
+      provider: 'openai',
+      model: 'fixture',
+      apiKey: 'key',
+      baseUrl: 'https://example.invalid/v1',
+    });
+
+    await assert.rejects(
+      () =>
+        client.complete({
+          stage: 'compiler',
+          prompt: '{}',
+          responseFormat: 'json',
+          maxOutputTokens: -1,
+        }),
+      /maxOutputTokens must be a positive safe integer/
+    );
+    assert.equal(fetchCalls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+
+test('provider clients record endpoint provenance without exposing the endpoint URL', () => {
+  const customUrl = 'https://proxy.example.invalid/v1';
+  const custom = createModelClient({
+    provider: 'openai',
+    model: 'fixture',
+    apiKey: 'key',
+    baseUrl: customUrl,
+  });
+
+  assert.equal(custom.endpoint_kind, 'custom');
+  assert.equal(typeof custom.endpoint_hash, 'string');
+  assert.equal(custom.endpoint_hash?.length, 64);
+  assert.equal(custom.endpoint_hash?.includes('proxy.example.invalid'), false);
+
+  const official = createModelClient({
+    provider: 'openai',
+    model: 'fixture',
+    apiKey: 'key',
+  });
+  assert.equal(official.endpoint_kind, 'official');
+  assert.equal(official.endpoint_hash?.length, 64);
+  assert.notEqual(custom.endpoint_hash, official.endpoint_hash);
+});
+
+
+test('modelDescriptorFromEnv resolves model provenance without requiring an API key', () => {
+  const prefix = 'LINYUAN_BASELINEFIXTURE_';
+  const previous = {
+    provider: process.env[prefix + 'PROVIDER'],
+    model: process.env[prefix + 'MODEL'],
+    temperature: process.env[prefix + 'TEMPERATURE'],
+    baseUrl: process.env[prefix + 'BASE_URL'],
+  };
+
+  process.env[prefix + 'PROVIDER'] = 'openai';
+  process.env[prefix + 'MODEL'] = 'fixture-alias';
+  process.env[prefix + 'TEMPERATURE'] = '0.25';
+  process.env[prefix + 'BASE_URL'] = 'https://proxy.example.invalid/v1';
+
+  try {
+    const descriptor = modelDescriptorFromEnv('baselinefixture');
+    assert.ok(descriptor);
+    assert.equal(descriptor.provider, 'openai');
+    assert.equal(descriptor.model, 'fixture-alias');
+    assert.equal(descriptor.defaults.temperature, 0.25);
+    assert.equal(descriptor.endpoint_kind, 'custom');
+    assert.equal(descriptor.endpoint_hash.length, 64);
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      const envKey =
+        key === 'provider'
+          ? prefix + 'PROVIDER'
+          : key === 'model'
+            ? prefix + 'MODEL'
+            : key === 'temperature'
+              ? prefix + 'TEMPERATURE'
+              : prefix + 'BASE_URL';
+      if (value === undefined) delete process.env[envKey];
+      else process.env[envKey] = value;
+    }
+  }
+});
+
+
+test('provider HTTP adapters reject invalid token usage metadata', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response(
+      JSON.stringify({
+        id: 'resp_bad_usage',
+        model: 'fixture-model',
+        output_text: '{}',
+        usage: {
+          input_tokens: 1,
+          output_tokens: 1,
+          total_tokens: -1,
+        },
+      }),
+      {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
+
+  try {
+    const client = createModelClient({
+      provider: 'openai',
+      model: 'fixture-model',
+      apiKey: 'fixture-key',
+      baseUrl: 'https://example.invalid/v1',
+    });
+    await assert.rejects(
+      () =>
+        client.complete({
+          stage: 'compiler',
+          prompt: '{}',
+          responseFormat: 'json',
+        }),
+      /invalid token usage/
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+
+test('Anthropic implicit max_tokens default is recorded as an effective client default', async () => {
+  const originalFetch = globalThis.fetch;
+  let capturedBody: Record<string, unknown> | null = null;
+  globalThis.fetch = async (_input, init) => {
+    capturedBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    return new Response(
+      JSON.stringify({
+        id: 'msg_default_tokens',
+        model: 'claude-fixture',
+        content: [{ type: 'text', text: '{}' }],
+        usage: { input_tokens: 1, output_tokens: 1 },
+      }),
+      {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
+  };
+
+  try {
+    const client = createModelClient({
+      provider: 'anthropic',
+      model: 'claude-fixture',
+      apiKey: 'fixture-key',
+      baseUrl: 'https://anthropic.invalid',
+    });
+
+    assert.equal(client.defaults.maxOutputTokens, 4096);
+    await client.complete({
+      stage: 'compiler',
+      prompt: '{}',
+      responseFormat: 'json',
+    });
+    assert.ok(capturedBody);
+    assert.equal((capturedBody as Record<string, unknown>)['max_tokens'], 4096);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  const prefix = 'LINYUAN_ANTHROPICFIXTURE_';
+  const previousProvider = process.env[prefix + 'PROVIDER'];
+  const previousModel = process.env[prefix + 'MODEL'];
+  process.env[prefix + 'PROVIDER'] = 'anthropic';
+  process.env[prefix + 'MODEL'] = 'claude-fixture';
+  try {
+    const descriptor = modelDescriptorFromEnv('anthropicfixture');
+    assert.ok(descriptor);
+    assert.equal(descriptor.defaults.maxOutputTokens, 4096);
+  } finally {
+    if (previousProvider === undefined) delete process.env[prefix + 'PROVIDER'];
+    else process.env[prefix + 'PROVIDER'] = previousProvider;
+    if (previousModel === undefined) delete process.env[prefix + 'MODEL'];
+    else process.env[prefix + 'MODEL'] = previousModel;
+  }
+});
+
+
+test('model base URLs reject embedded credentials, query data, fragments, and non-HTTP schemes', () => {
+  for (const baseUrl of [
+    'https://user:password@example.invalid/v1',
+    'https://example.invalid/v1?token=secret',
+    'https://example.invalid/v1#fragment',
+    'file:///tmp/model-api',
+  ]) {
+    assert.throws(
+      () =>
+        createModelClient({
+          provider: 'openai',
+          model: 'fixture',
+          apiKey: 'key',
+          baseUrl,
+        }),
+      /base URL/
+    );
   }
 });

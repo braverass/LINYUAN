@@ -31,13 +31,13 @@ jobs:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7.0.0
         with:
           node-version: "22"
 
-      - run: npm install --ignore-scripts
+      - run: npm ci --ignore-scripts
 
       - name: Verify selected provider secret exists
         shell: bash
@@ -75,6 +75,7 @@ jobs:
           --scene-file live-scene.json
           --max-context-rounds 2
           --run-dir runs/live/github-${{ github.run_id }}-${{ github.run_attempt }}
+          --repo-root .
           --json
 
       - name: Verify live evidence bundle

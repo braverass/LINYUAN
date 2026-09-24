@@ -99,7 +99,7 @@ function parseArgs(args: string[]): CliOptions {
     else if (arg === '--calls-output') options.callsOutput = value;
     else if (arg === '--max-context-rounds') {
       const parsed = Number(value);
-      if (!Number.isInteger(parsed) || parsed < 1) {
+      if (!Number.isSafeInteger(parsed) || parsed < 1) {
         throw new Error('--max-context-rounds must be a positive integer');
       }
       options.maxContextRounds = parsed;

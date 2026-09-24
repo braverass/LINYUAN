@@ -55,6 +55,8 @@ Spec 0.6 reports:
 - `patch_locality`
 - `metamorphic_invariance_rate`
 
+`patch_locality` is computed from recorded before/after patch applications by an eval-side auditor. It is not filled with a constant success value and does not reuse the production patch application function.
+
 High-is-good metrics use minimum thresholds. Error rates use maximum thresholds.
 
 ## Reference executor

@@ -2,6 +2,7 @@ import { verifyLiveFictionBundle } from './verify-live-bundle';
 
 interface CliOptions {
   runDir?: string;
+  repoRoot?: string;
   json: boolean;
   help: boolean;
 }
@@ -10,16 +11,18 @@ const HELP = [
   'LINYUAN live evidence verifier',
   '',
   'Usage:',
-  '  npm run fiction:verify -- --run-dir <evidence-directory> [--json]',
+  '  npm run fiction:verify -- --run-dir <evidence-directory> [--repo-root <repo>] [--json]',
   '',
   'Options:',
   '  --run-dir <path>   Live evidence bundle directory',
+  '  --repo-root <path> Also bind commit, registry, prompt templates, and default system to this repository',
   '  --json             Print the full machine-readable verification report',
   '  --help             Show this help',
   '',
   'Verification checks directory closure, artifact byte counts and SHA-256 hashes,',
   'status-specific file layout, and cross-file manifest consistency.',
-  'It does not prove that an external provider actually served the recorded calls.',
+  '--repo-root additionally binds repository-controlled provenance to the selected checkout.',
+  'It still does not prove that an external provider actually served the recorded calls.',
   '',
 ].join('\n');
 
@@ -39,12 +42,13 @@ function parseArgs(args: string[]): CliOptions {
       options.json = true;
       continue;
     }
-    if (arg === '--run-dir') {
+    if (arg === '--run-dir' || arg === '--repo-root') {
       const value = args[index + 1];
       if (value === undefined || value.startsWith('--')) {
-        throw new Error('--run-dir requires a value');
+        throw new Error(arg + ' requires a value');
       }
-      options.runDir = value;
+      if (arg === '--run-dir') options.runDir = value;
+      else options.repoRoot = value;
       index += 1;
       continue;
     }
@@ -64,7 +68,9 @@ async function runCli(args: string[]): Promise<number> {
     throw new Error('--run-dir is required');
   }
 
-  const report = await verifyLiveFictionBundle(options.runDir);
+  const report = await verifyLiveFictionBundle(options.runDir, {
+    ...(options.repoRoot ? { repoRoot: options.repoRoot } : {}),
+  });
   if (options.json) {
     process.stdout.write(JSON.stringify(report, null, 2) + '\n');
   } else if (report.ok) {

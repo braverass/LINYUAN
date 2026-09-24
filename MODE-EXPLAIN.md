@@ -42,3 +42,14 @@ EXPLAIN 可以读取 Retriever 的证据、semantic IDs 和 provenance，并应�
 简言之：**Canon 是回答的依据，不是默认回答内容。**
 
 EXPLAIN 的 evidence-rich context 不得被复用为后续 FICTION Generator history。需要转入创作时，重新从 REQUEST / SCENE_STATE 开始，经过 Compiler 生成新的 ACTIVE_CONTEXT。
+
+
+## Executable boundary
+
+生产入口：
+
+`npm run explain -- --request "<question>"`
+
+默认模式只输出 `answer`。需要来源说明时显式使用 `--evidence`，此时 runtime 才允许额外返回用户可见的 `evidence_summary`。
+
+EXPLAIN runtime 不返回 Raw Canon、检索 prompt 或模型 message history；切换到 FICTION 时必须重新建立独立调用链。

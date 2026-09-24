@@ -5,7 +5,16 @@ on:
     branches: [main]
     paths:
       - "runtime/**"
+      - "SOURCE_REGISTRY.yaml"
+      - "MODE-FICTION.md"
+      - "00*.md"
+      - "01-*.md"
+      - "02-*.md"
+      - "03-*.md"
+      - "04-*.md"
+      - "05-*.md"
       - "package.json"
+      - "package-lock.json"
       - "SPEC-0.9-LIVE-E2E.md"
       - "SPEC-1.0-EVIDENCE-VERIFICATION.md"
       - ".github/workflows/spec-0.9-live.yml"
@@ -13,7 +22,16 @@ on:
   pull_request:
     paths:
       - "runtime/**"
+      - "SOURCE_REGISTRY.yaml"
+      - "MODE-FICTION.md"
+      - "00*.md"
+      - "01-*.md"
+      - "02-*.md"
+      - "03-*.md"
+      - "04-*.md"
+      - "05-*.md"
       - "package.json"
+      - "package-lock.json"
       - "SPEC-0.9-LIVE-E2E.md"
       - "SPEC-1.0-EVIDENCE-VERIFICATION.md"
       - ".github/workflows/spec-0.9-live.yml"
@@ -26,9 +44,9 @@ jobs:
   evidence-verification:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.0.0
         with:
           node-version: "22"
-      - run: npm install --ignore-scripts
+      - run: npm ci --ignore-scripts
       - run: npm run ci

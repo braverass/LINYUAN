@@ -11,6 +11,7 @@ import { stableHash } from '../trace';
 import type { Violation } from '../types';
 import type { ValidatorInput } from '../validator';
 import { parseJsonObject } from '../model/json';
+import { validateModelResponse } from '../model/evidence';
 import type {
   ModelCallRecord,
   ModelClient,
@@ -75,10 +76,12 @@ async function invoke(
   calls: ModelCallRecord[]
 ): Promise<ModelResponse> {
   const response = await client.complete(request);
+  validateModelResponse(client, response);
   calls.push({
     stage: request.stage,
     provider: response.provider,
     model: response.model,
+    requested_model: client.model,
     request_hash: stableHash(request),
     response_hash: stableHash(response.text),
     response_format: request.responseFormat,
@@ -181,9 +184,20 @@ export async function createModelBackedRuntime(
     return validateSemanticIds(result.semantic_ids, registry);
   };
 
+  const assertSourceRole = (
+    semanticIds: string[],
+    role: 'orchestrator' | 'compiler' | 'validator'
+  ): void => {
+    for (const semanticId of semanticIds) {
+      assertRoleAccess(registry, semanticId, role);
+    }
+  };
+
   const adapters: RuntimeAdapters = {
-    retrieve: async (semanticIds) =>
-      retrieveBySemanticIds(semanticIds, { repoRoot, registry }),
+    retrieve: async (semanticIds) => {
+      assertSourceRole(semanticIds, 'orchestrator');
+      return retrieveBySemanticIds(semanticIds, { repoRoot, registry });
+    },
 
     planInitialRetrieval,
 
@@ -209,6 +223,10 @@ export async function createModelBackedRuntime(
     },
 
     compile: async (input) => {
+      assertSourceRole(
+        input.canonFragments.map((fragment) => fragment.semanticId),
+        'compiler'
+      );
       const output = await invokeJson<CompilerModelOutput>(
         clients.compiler,
         {
@@ -265,6 +283,10 @@ export async function createModelBackedRuntime(
     },
 
     validate: async (input) => {
+      assertSourceRole(
+        input.evidence.rawCanon.map((fragment) => fragment.semanticId),
+        'validator'
+      );
       const result = await invokeJson<{ violations: Violation[] }>(
         clients.validator,
         {
@@ -282,9 +304,10 @@ export async function createModelBackedRuntime(
         },
         calls
       );
-      const violations = Array.isArray(result.violations)
-        ? result.violations
-        : [];
+      if (!Array.isArray(result.violations)) {
+        throw new Error('Validator model must return violations: []');
+      }
+      const violations = result.violations;
       artifacts.validator_calls.push({
         input: structuredClone(input),
         violations: structuredClone(violations),

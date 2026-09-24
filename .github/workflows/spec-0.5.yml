@@ -5,32 +5,47 @@ on:
     branches: [main]
     paths:
       - "SOURCE_REGISTRY.yaml"
+      - "00*.md"
+      - "01-*.md"
+      - "02-*.md"
+      - "03-*.md"
+      - "04-*.md"
+      - "05-*.md"
       - "AI_ENTRY.md"
       - "MODE-FICTION.md"
       - "MODE-EXPLAIN.md"
       - "00A-按需读取与写作执行协议.md"
       - "runtime/**"
       - "package.json"
+      - "package-lock.json"
       - "tsconfig.json"
       - ".github/workflows/spec-0.5.yml"
   pull_request:
     paths:
       - "SOURCE_REGISTRY.yaml"
+      - "00*.md"
+      - "01-*.md"
+      - "02-*.md"
+      - "03-*.md"
+      - "04-*.md"
+      - "05-*.md"
       - "AI_ENTRY.md"
       - "MODE-FICTION.md"
       - "MODE-EXPLAIN.md"
       - "00A-按需读取与写作执行协议.md"
       - "runtime/**"
       - "package.json"
+      - "package-lock.json"
       - "tsconfig.json"
+      - ".github/workflows/spec-0.5.yml"
 
 jobs:
   runtime-contract:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.0.0
         with:
           node-version: "22"
-      - run: npm install --ignore-scripts
+      - run: npm ci --ignore-scripts
       - run: npm run ci

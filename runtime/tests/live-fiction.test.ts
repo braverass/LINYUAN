@@ -104,6 +104,10 @@ test('live fiction writes an auditable evidence bundle', async () => {
     assert.equal(run.manifest.version, '0.9');
     assert.equal(run.manifest.status, 'OUTPUT');
     assert.equal(run.manifest.runtime_contract.system_hash?.length, 64);
+    assert.equal(
+      run.manifest.runtime_contract.prompt_template_hashes.runtime_adapter_source?.length,
+      64
+    );
     assert.deepEqual(
       run.manifest.calls.map((call) => call.stage),
       ['compiler', 'generator', 'validator']

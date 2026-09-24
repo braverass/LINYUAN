@@ -139,3 +139,177 @@ test('production fiction entry runs retrieval through local patching', async () 
     { paragraph: 1, sentences: [2, 2] },
   ]);
 });
+
+
+test('production runtime rejects a model response from a different provider', async () => {
+  const client: ModelClient = {
+    provider: 'openai',
+    model: 'fixture-model',
+    defaults: {},
+    async complete(): Promise<ModelResponse> {
+      return {
+        provider: 'gemini',
+        model: 'fixture-model',
+        text: '{}',
+        latencyMs: 1,
+      };
+    },
+  };
+  const clients: RuntimeModelClients = {
+    retrievalPlanner: client,
+    compiler: client,
+    generator: client,
+    validator: client,
+    patcher: client,
+  };
+
+  await assert.rejects(
+    () =>
+      runProductionFiction(
+        {
+          request: 'fixture',
+          sceneState: {},
+          system: 'fixture system',
+          repoRoot: process.cwd(),
+        },
+        clients
+      ),
+    /provider does not match configured client provider/
+  );
+});
+
+test('production runtime rejects invalid usage metadata before recording evidence', async () => {
+  const client: ModelClient = {
+    provider: 'openai',
+    model: 'fixture-model',
+    defaults: {},
+    async complete(request): Promise<ModelResponse> {
+      assert.equal(request.stage, 'compiler');
+      return {
+        provider: 'openai',
+        model: 'fixture-model',
+        text: '{}',
+        latencyMs: 1,
+        usage: { totalTokens: -1 },
+      };
+    },
+  };
+  const clients: RuntimeModelClients = {
+    retrievalPlanner: client,
+    compiler: client,
+    generator: client,
+    validator: client,
+    patcher: client,
+  };
+
+  await assert.rejects(
+    () =>
+      runProductionFiction(
+        {
+          request: 'fixture',
+          semanticIds: ['AUTHOR.PERSONALITY'],
+          system: 'fixture system',
+          repoRoot: process.cwd(),
+        },
+        clients
+      ),
+    /usage.totalTokens must be a non-negative safe integer/
+  );
+});
+
+
+test('production runtime rejects overlapping validator patch scopes before patching', async () => {
+  let patchCalls = 0;
+  const client = fixtureClient((request) => {
+    if (request.stage === 'compiler') {
+      return JSON.stringify({
+        status: 'READY',
+        activeContext: {
+          version: '0.5',
+          facts: [],
+          constraints: [],
+          unknowns: [],
+          inference_barriers: [],
+          open_dimensions: {
+            action_selection: true,
+            dialogue_realization: true,
+            pacing: true,
+            nonverbal_behavior: true,
+            emotional_expression: true,
+          },
+        },
+        provenance: {},
+      });
+    }
+    if (request.stage === 'generator') {
+      return JSON.stringify({
+        status: 'DRAFT',
+        draft: '第一句。第二句。第三句。',
+      });
+    }
+    if (request.stage === 'validator') {
+      const base = {
+        severity: 'hard',
+        actual: { semantic_claim: 'fixture mismatch' },
+        required_state: { corrected: true },
+        preserve: [],
+        required_change: ['fix'],
+      };
+      return JSON.stringify({
+        violations: [
+          {
+            id: 'V1',
+            severity: base.severity,
+            location: { paragraph: 1, sentence_start: 1, sentence_end: 2 },
+            actual: base.actual,
+            required_state: base.required_state,
+            patch_contract: {
+              allowed_scope: { paragraph: 1, sentences: [1, 2] },
+              preserve: base.preserve,
+              required_change: base.required_change,
+            },
+          },
+          {
+            id: 'V2',
+            severity: base.severity,
+            location: { paragraph: 1, sentence_start: 2, sentence_end: 3 },
+            actual: base.actual,
+            required_state: base.required_state,
+            patch_contract: {
+              allowed_scope: { paragraph: 1, sentences: [2, 3] },
+              preserve: base.preserve,
+              required_change: base.required_change,
+            },
+          },
+        ],
+      });
+    }
+    if (request.stage === 'patcher') {
+      patchCalls += 1;
+      return JSON.stringify({ replacement: '不应执行。' });
+    }
+    throw new Error('Unexpected stage: ' + request.stage);
+  });
+  const clients: RuntimeModelClients = {
+    retrievalPlanner: client,
+    compiler: client,
+    generator: client,
+    validator: client,
+    patcher: client,
+  };
+
+  await assert.rejects(
+    () =>
+      runProductionFiction(
+        {
+          request: 'fixture',
+          semanticIds: ['AUTHOR.PERSONALITY'],
+          system: 'fixture system',
+          repoRoot: process.cwd(),
+        },
+        clients
+      ),
+    /overlapping patch scopes/
+  );
+  assert.equal(patchCalls, 0);
+});

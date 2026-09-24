@@ -7,6 +7,7 @@ import {
 import { generateIsolated, type GeneratorPayload } from '../runtime/generator';
 import {
   createModelBackedRuntime,
+  type ModelBackedArtifacts,
   type RuntimeModelClients,
 } from '../runtime/adapters/model-backed';
 import { runFiction, type FictionRunResult } from '../runtime/orchestrator';
@@ -23,6 +24,7 @@ import {
   type CandidateInput,
 } from './candidate-boundary';
 import { judgeCase } from './judge';
+import { countPatchChangesOutsideScope } from './patch-locality';
 import type { EvalCase, EvalObservation } from './types';
 
 const SYNTHETIC_SOURCE_ID = 'EVAL.SYNTHETIC';
@@ -36,6 +38,7 @@ interface CandidateRun {
   predicted_missing: MissingContext[];
   validator_violations: Violation[];
   samples: string[];
+  patch_calls: ModelBackedArtifacts['patcher_calls'];
   calls: ModelCallRecord[];
 }
 
@@ -136,6 +139,9 @@ async function runCandidate(
       ? structuredClone(lastValidator.violations)
       : [],
     samples,
+    patch_calls: runtime.artifacts.patcher_calls.map((item) =>
+      structuredClone(item)
+    ),
     calls: runtime.calls.map((call) => structuredClone(call)),
   };
 }
@@ -184,7 +190,10 @@ export async function executeRealEvalCase(
     validator_positive_ids:
       judged.result.validator_positive_ids ?? [],
     patch_count: candidateRun.trace.patcher.scopes.length,
-    patch_changes_outside_scope: 0,
+    patch_changes_outside_scope: countPatchChangesOutsideScope(
+      candidateRun.patch_calls,
+      candidateRun.output
+    ),
     normalized_ir_hash: candidateRun.active_context
       ? stableHash(normalizeActiveContext(candidateRun.active_context))
       : null,

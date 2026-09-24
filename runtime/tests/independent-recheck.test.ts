@@ -239,14 +239,20 @@ test('adversarial recheck: impossible successful max_context_rounds is rejected'
   }
 });
 
-test('compatibility boundary: old 0.9 shape without response_id still passes when commit provenance is concrete', async () => {
+test('compatibility boundary: old 0.9 shape without response_id/requested_model still passes when commit provenance is concrete', async () => {
   const runDir = await mkdtemp(path.join(os.tmpdir(), 'linyuan-recheck-old09-'));
   try {
     await makeBundle(runDir);
     const manifest = await readJson(path.join(runDir, 'manifest.json'));
     const calls = await readJson(path.join(runDir, 'calls.json'));
-    for (const item of calls) delete item.response_id;
-    for (const item of manifest.calls) delete item.response_id;
+    for (const item of calls) {
+      delete item.response_id;
+      delete item.requested_model;
+    }
+    for (const item of manifest.calls) {
+      delete item.response_id;
+      delete item.requested_model;
+    }
     await writeTrackedJson(runDir, 'calls.json', calls, manifest);
     await saveManifest(runDir, manifest);
 
@@ -293,6 +299,352 @@ test('documented authenticity limit: another syntactically valid commit SHA is n
       report.ok,
       true,
       'this test documents the offline verifier boundary; repository provenance is external'
+    );
+  } finally {
+    await rm(runDir, { recursive: true, force: true });
+  }
+});
+
+
+test('adversarial recheck: OUTPUT cannot resume compilation after validation', async () => {
+  const runDir = await mkdtemp(path.join(os.tmpdir(), 'linyuan-recheck-post-validator-'));
+  try {
+    await makeBundle(runDir);
+    const manifest = await readJson(path.join(runDir, 'manifest.json'));
+    const calls = await readJson(path.join(runDir, 'calls.json'));
+    calls.push(structuredClone(calls[0]));
+    manifest.calls = JSON.parse(JSON.stringify(calls));
+    await writeTrackedJson(runDir, 'calls.json', calls, manifest);
+    await saveManifest(runDir, manifest);
+
+    const report = await verifyLiveFictionBundle(runDir);
+    assert.equal(report.ok, false);
+    assert.equal(
+      report.errors.some((issue) => issue.code === 'CALL_SEQUENCE_INVALID'),
+      true
+    );
+  } finally {
+    await rm(runDir, { recursive: true, force: true });
+  }
+});
+
+test('adversarial recheck: trace schema and patch causality cannot drift', async () => {
+  const runDir = await mkdtemp(path.join(os.tmpdir(), 'linyuan-recheck-trace-shape-'));
+  try {
+    await makeBundle(runDir);
+    const manifest = await readJson(path.join(runDir, 'manifest.json'));
+    const trace = await readJson(path.join(runDir, 'trace.json'));
+    trace.version = '0.4';
+    trace.validator.violations.push({
+      id: 'V-extra',
+      severity: 'hard',
+      evidence_refs: [],
+    });
+    await writeTrackedJson(runDir, 'trace.json', trace, manifest);
+    await saveManifest(runDir, manifest);
+
+    const report = await verifyLiveFictionBundle(runDir);
+    assert.equal(report.ok, false);
+    assert.equal(
+      report.errors.some((issue) => issue.code === 'TRACE_VERSION_INVALID'),
+      true
+    );
+    assert.equal(
+      report.errors.some(
+        (issue) => issue.code === 'TRACE_PATCHER_VIOLATION_COUNT_MISMATCH'
+      ),
+      true
+    );
+  } finally {
+    await rm(runDir, { recursive: true, force: true });
+  }
+});
+
+test('adversarial recheck: successful runtime contract hashes must be SHA-256 values', async () => {
+  const runDir = await mkdtemp(path.join(os.tmpdir(), 'linyuan-recheck-contract-hash-'));
+  try {
+    await makeBundle(runDir);
+    const manifest = await readJson(path.join(runDir, 'manifest.json'));
+    manifest.runtime_contract.source_registry_hash = 'not-a-hash';
+    await saveManifest(runDir, manifest);
+
+    const report = await verifyLiveFictionBundle(runDir);
+    assert.equal(report.ok, false);
+    assert.equal(
+      report.errors.some((issue) => issue.code === 'RUNTIME_REGISTRY_HASH_INVALID'),
+      true
+    );
+  } finally {
+    await rm(runDir, { recursive: true, force: true });
+  }
+});
+
+
+test('repository-bound recheck accepts a bundle produced from the current checkout', async () => {
+  const runDir = await mkdtemp(path.join(os.tmpdir(), 'linyuan-recheck-repo-bound-'));
+  try {
+    await makeBundle(runDir);
+    const report = await verifyLiveFictionBundle(runDir, {
+      repoRoot: process.cwd(),
+    });
+    assert.equal(report.ok, true, JSON.stringify(report.errors));
+  } finally {
+    await rm(runDir, { recursive: true, force: true });
+  }
+});
+
+test('repository-bound recheck rejects a syntactically valid but wrong commit SHA', async () => {
+  const runDir = await mkdtemp(path.join(os.tmpdir(), 'linyuan-recheck-repo-commit-'));
+  try {
+    await makeBundle(runDir);
+    const manifest = await readJson(path.join(runDir, 'manifest.json'));
+    manifest.commit_sha = 'f'.repeat(40);
+    await saveManifest(runDir, manifest);
+
+    const offline = await verifyLiveFictionBundle(runDir);
+    assert.equal(offline.ok, true, JSON.stringify(offline.errors));
+
+    const bound = await verifyLiveFictionBundle(runDir, {
+      repoRoot: process.cwd(),
+    });
+    assert.equal(bound.ok, false);
+    assert.equal(
+      bound.errors.some((issue) => issue.code === 'REPO_COMMIT_MISMATCH'),
+      true
+    );
+  } finally {
+    await rm(runDir, { recursive: true, force: true });
+  }
+});
+
+test('repository-bound recheck binds registry and executable prompt hashes', async () => {
+  const runDir = await mkdtemp(path.join(os.tmpdir(), 'linyuan-recheck-repo-contract-'));
+  try {
+    await makeBundle(runDir);
+    const manifest = await readJson(path.join(runDir, 'manifest.json'));
+    manifest.runtime_contract.source_registry_hash = 'a'.repeat(64);
+    manifest.runtime_contract.prompt_template_hashes.compiler = 'b'.repeat(64);
+    await saveManifest(runDir, manifest);
+
+    const offline = await verifyLiveFictionBundle(runDir);
+    assert.equal(offline.ok, true, JSON.stringify(offline.errors));
+
+    const bound = await verifyLiveFictionBundle(runDir, {
+      repoRoot: process.cwd(),
+    });
+    assert.equal(bound.ok, false);
+    assert.equal(
+      bound.errors.some((issue) => issue.code === 'REPO_REGISTRY_HASH_MISMATCH'),
+      true
+    );
+    assert.equal(
+      bound.errors.some((issue) => issue.code === 'REPO_PROMPT_HASH_MISMATCH'),
+      true
+    );
+  } finally {
+    await rm(runDir, { recursive: true, force: true });
+  }
+});
+
+
+test('provider-returned snapshot model may differ from the configured alias', async () => {
+  const runDir = await mkdtemp(path.join(os.tmpdir(), 'linyuan-recheck-model-alias-'));
+  try {
+    const aliasClient: ModelClient = {
+      provider: 'openai',
+      model: 'fixture-alias',
+      defaults: {},
+      async complete(request: ModelRequest): Promise<ModelResponse> {
+        const common = {
+          provider: 'openai' as const,
+          model: 'fixture-alias-2026-09-24',
+          latencyMs: 1,
+        };
+        if (request.stage === 'compiler') {
+          return {
+            ...common,
+            text: JSON.stringify({
+              status: 'READY',
+              activeContext: {
+                version: '0.5',
+                facts: [],
+                constraints: [],
+                unknowns: [],
+                inference_barriers: [],
+                open_dimensions: {
+                  action_selection: true,
+                  dialogue_realization: true,
+                  pacing: true,
+                  nonverbal_behavior: true,
+                  emotional_expression: true,
+                },
+              },
+              provenance: {},
+            }),
+          };
+        }
+        if (request.stage === 'generator') {
+          return {
+            ...common,
+            text: JSON.stringify({ status: 'DRAFT', draft: 'fixture output' }),
+          };
+        }
+        if (request.stage === 'validator') {
+          return {
+            ...common,
+            text: JSON.stringify({ violations: [] }),
+          };
+        }
+        throw new Error('unexpected stage ' + request.stage);
+      },
+    };
+    const aliasClients: RuntimeModelClients = {
+      retrievalPlanner: aliasClient,
+      compiler: aliasClient,
+      generator: aliasClient,
+      validator: aliasClient,
+      patcher: aliasClient,
+    };
+
+    const run = await runLiveFictionBundle(
+      {
+        request: 'fixture request',
+        sceneState: {},
+        semanticIds: ['AUTHOR.PERSONALITY'],
+        maxContextRounds: 3,
+        system: 'fixture system',
+        repoRoot: process.cwd(),
+      },
+      { runDir, clients: aliasClients }
+    );
+
+    assert.equal(
+      run.manifest.calls.every(
+        (call) =>
+          call.requested_model === 'fixture-alias' &&
+          call.model === 'fixture-alias-2026-09-24'
+      ),
+      true
+    );
+    const report = await verifyLiveFictionBundle(runDir);
+    assert.equal(report.ok, true, JSON.stringify(report.errors));
+  } finally {
+    await rm(runDir, { recursive: true, force: true });
+  }
+});
+
+
+test('repository-bound recheck binds retrieved Canon content to registry sources', async () => {
+  const runDir = await mkdtemp(path.join(os.tmpdir(), 'linyuan-recheck-repo-retrieval-'));
+  try {
+    await makeBundle(runDir);
+    const manifest = await readJson(path.join(runDir, 'manifest.json'));
+    const trace = await readJson(path.join(runDir, 'trace.json'));
+    manifest.retrieval[0].content_hash = 'c'.repeat(64);
+    trace.retrieval[0].content_hash = 'c'.repeat(64);
+    await writeTrackedJson(runDir, 'trace.json', trace, manifest);
+    await saveManifest(runDir, manifest);
+
+    const offline = await verifyLiveFictionBundle(runDir);
+    assert.equal(offline.ok, true, JSON.stringify(offline.errors));
+
+    const bound = await verifyLiveFictionBundle(runDir, {
+      repoRoot: process.cwd(),
+    });
+    assert.equal(bound.ok, false);
+    assert.equal(
+      bound.errors.some((issue) => issue.code === 'REPO_RETRIEVAL_HASH_MISMATCH'),
+      true
+    );
+  } finally {
+    await rm(runDir, { recursive: true, force: true });
+  }
+});
+
+test('repository-bound recheck binds the default MODE-FICTION system', async () => {
+  const runDir = await mkdtemp(path.join(os.tmpdir(), 'linyuan-recheck-repo-system-'));
+  try {
+    await runLiveFictionBundle(
+      {
+        request: 'fixture request',
+        sceneState: {},
+        semanticIds: ['AUTHOR.PERSONALITY'],
+        maxContextRounds: 3,
+        repoRoot: process.cwd(),
+      },
+      { runDir, clients: clients() }
+    );
+
+    const manifest = await readJson(path.join(runDir, 'manifest.json'));
+    assert.equal(manifest.input.custom_system, false);
+    manifest.runtime_contract.system_hash = 'd'.repeat(64);
+    await saveManifest(runDir, manifest);
+
+    const offline = await verifyLiveFictionBundle(runDir);
+    assert.equal(offline.ok, true, JSON.stringify(offline.errors));
+
+    const bound = await verifyLiveFictionBundle(runDir, {
+      repoRoot: process.cwd(),
+    });
+    assert.equal(bound.ok, false);
+    assert.equal(
+      bound.errors.some((issue) => issue.code === 'REPO_SYSTEM_HASH_MISMATCH'),
+      true
+    );
+  } finally {
+    await rm(runDir, { recursive: true, force: true });
+  }
+});
+
+
+test('adversarial recheck: invalid numeric stage defaults cannot hide behind matching call settings', async () => {
+  const runDir = await mkdtemp(path.join(os.tmpdir(), 'linyuan-recheck-invalid-model-settings-'));
+  try {
+    await makeBundle(runDir);
+    const manifest = await readJson(path.join(runDir, 'manifest.json'));
+    const calls = await readJson(path.join(runDir, 'calls.json'));
+
+    manifest.stage_models.compiler.defaults.maxOutputTokens = -7;
+    const compilerCall = calls.find((call: any) => call.stage === 'compiler');
+    assert.ok(compilerCall);
+    compilerCall.settings.max_output_tokens = -7;
+    manifest.calls = JSON.parse(JSON.stringify(calls));
+
+    await writeTrackedJson(runDir, 'calls.json', calls, manifest);
+    await saveManifest(runDir, manifest);
+
+    const report = await verifyLiveFictionBundle(runDir);
+    assert.equal(report.ok, false);
+    assert.equal(
+      report.errors.some(
+        (issue) => issue.code === 'STAGE_MODEL_DEFAULTS_INVALID'
+      ),
+      true
+    );
+    assert.equal(
+      report.errors.some((issue) => issue.code === 'CALL_SETTINGS_INVALID'),
+      true
+    );
+  } finally {
+    await rm(runDir, { recursive: true, force: true });
+  }
+});
+
+
+test('adversarial recheck: endpoint provenance fields must be paired and well-formed', async () => {
+  const runDir = await mkdtemp(path.join(os.tmpdir(), 'linyuan-recheck-endpoint-shape-'));
+  try {
+    await makeBundle(runDir);
+    const manifest = await readJson(path.join(runDir, 'manifest.json'));
+    manifest.stage_models.compiler.endpoint_kind = 'custom';
+    delete manifest.stage_models.compiler.endpoint_hash;
+    await saveManifest(runDir, manifest);
+
+    const report = await verifyLiveFictionBundle(runDir);
+    assert.equal(report.ok, false);
+    assert.equal(
+      report.errors.some((issue) => issue.code === 'STAGE_MODEL_ENDPOINT_INVALID'),
+      true
     );
   } finally {
     await rm(runDir, { recursive: true, force: true });

@@ -5,6 +5,7 @@ import type { RawCanonFragment } from './compiler';
 import {
   assertRoleAccess,
   loadRegistry,
+  resolveRegisteredSourcePath,
   SourceRegistry,
 } from './registry';
 import { stableHash } from './trace';
@@ -27,7 +28,7 @@ export async function retrieveBySemanticIds(
 
   for (const semanticId of [...new Set(semanticIds)]) {
     const source = assertRoleAccess(registry, semanticId, 'retriever');
-    const physicalPath = path.resolve(repoRoot, source.path);
+    const physicalPath = await resolveRegisteredSourcePath(repoRoot, source.path);
     const content = await readFile(physicalPath, 'utf8');
 
     fragments.push({

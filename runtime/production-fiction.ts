@@ -37,15 +37,48 @@ export function createProductionModelClientsFromEnv(): RuntimeModelClients {
   };
 }
 
-function assertProductionInput(input: ProductionFictionInput): void {
-  if (input.request.trim().length === 0) {
-    throw new Error('Fiction request must not be empty');
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+export function assertProductionFictionInput(
+  input: ProductionFictionInput
+): void {
+  if (typeof input.request !== 'string' || input.request.trim().length === 0) {
+    throw new Error('Fiction request must be a non-empty string');
+  }
+  if (input.sceneState !== undefined && !isPlainObject(input.sceneState)) {
+    throw new Error('sceneState must be a plain JSON object');
+  }
+  if (
+    input.semanticIds !== undefined &&
+    (!Array.isArray(input.semanticIds) ||
+      input.semanticIds.some(
+        (semanticId) =>
+          typeof semanticId !== 'string' || semanticId.trim().length === 0
+      ))
+  ) {
+    throw new Error('semanticIds must be an array of non-empty strings');
   }
   if (
     input.maxContextRounds !== undefined &&
-    (!Number.isInteger(input.maxContextRounds) || input.maxContextRounds < 1)
+    (!Number.isSafeInteger(input.maxContextRounds) || input.maxContextRounds < 1)
   ) {
-    throw new Error('maxContextRounds must be a positive integer');
+    throw new Error('maxContextRounds must be a positive safe integer');
+  }
+  if (
+    input.system !== undefined &&
+    (typeof input.system !== 'string' || input.system.trim().length === 0)
+  ) {
+    throw new Error('system must be a non-empty string when provided');
+  }
+  if (
+    input.repoRoot !== undefined &&
+    (typeof input.repoRoot !== 'string' || input.repoRoot.trim().length === 0)
+  ) {
+    throw new Error('repoRoot must be a non-empty string when provided');
   }
 }
 
@@ -53,7 +86,7 @@ export async function runProductionFiction(
   input: ProductionFictionInput,
   clients?: RuntimeModelClients
 ): Promise<ProductionFictionRun> {
-  assertProductionInput(input);
+  assertProductionFictionInput(input);
 
   const repoRoot = input.repoRoot ?? process.cwd();
   const system =
