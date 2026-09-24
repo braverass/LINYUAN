@@ -14,6 +14,7 @@ on:
       - "04-*.md"
       - "05-*.md"
       - "package.json"
+      - "package-lock.json"
       - "SPEC-0.9-LIVE-E2E.md"
       - "SPEC-1.0-EVIDENCE-VERIFICATION.md"
       - ".github/workflows/spec-0.9-live.yml"
@@ -30,6 +31,7 @@ on:
       - "04-*.md"
       - "05-*.md"
       - "package.json"
+      - "package-lock.json"
       - "SPEC-0.9-LIVE-E2E.md"
       - "SPEC-1.0-EVIDENCE-VERIFICATION.md"
       - ".github/workflows/spec-0.9-live.yml"
@@ -46,5 +48,5 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - run: npm install --ignore-scripts
+      - run: npm ci --ignore-scripts
       - run: npm run ci
