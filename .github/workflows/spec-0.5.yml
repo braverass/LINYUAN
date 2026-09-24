@@ -37,6 +37,7 @@ on:
       - "package.json"
       - "package-lock.json"
       - "tsconfig.json"
+      - ".github/workflows/spec-0.5.yml"
 
 jobs:
   runtime-contract:
