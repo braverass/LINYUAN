@@ -11,7 +11,7 @@
     "lint:registry": "tsx runtime/ci/lint-registry.ts",
     "eval": "tsx evals/runner.ts",
     "eval:smoke": "tsx evals/runner.ts --enforce",
-    "ci": "npm run typecheck && npm test && npm run lint:registry && npm run eval:smoke && npm run fiction:help && npm run fiction:live:help && npm run fiction:verify:help",
+    "ci": "npm run typecheck && npm test && npm run lint:registry && npm run eval:smoke && npm run fiction:help && npm run fiction:live:help && npm run fiction:verify:help && npm run explain:help",
     "eval:real": "tsx evals/real-runner.ts",
     "eval:verify-baseline": "tsx evals/verify-baseline.ts",
     "fiction": "tsx runtime/fiction-cli.ts",
@@ -19,7 +19,9 @@
     "fiction:live": "tsx runtime/live-fiction-cli.ts",
     "fiction:live:help": "tsx runtime/live-fiction-cli.ts --help",
     "fiction:verify": "tsx runtime/verify-live-bundle-cli.ts",
-    "fiction:verify:help": "tsx runtime/verify-live-bundle-cli.ts --help"
+    "fiction:verify:help": "tsx runtime/verify-live-bundle-cli.ts --help",
+    "explain": "tsx runtime/explain-cli.ts",
+    "explain:help": "tsx runtime/explain-cli.ts --help"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
