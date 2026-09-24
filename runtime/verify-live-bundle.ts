@@ -216,6 +216,174 @@ function settingsFromDefaults(defaults: JsonRecord): JsonRecord {
   };
 }
 
+function positiveSafeInteger(value: unknown): boolean {
+  return Number.isSafeInteger(value) && (value as number) >= 1;
+}
+
+function validateSuccessfulCallSequence(
+  status: string,
+  stages: string[],
+  semanticIds: unknown,
+  errors: LiveBundleVerificationIssue[]
+): void {
+  if (stages.length === 0) return;
+
+  if (semanticIds === null && stages[0] !== 'retrieval_planner') {
+    addIssue(
+      errors,
+      'CALL_SEQUENCE_INVALID',
+      'Planner-driven evidence must begin with retrieval_planner',
+      'manifest.json'
+    );
+  } else if (Array.isArray(semanticIds) && stages[0] !== 'compiler') {
+    addIssue(
+      errors,
+      'CALL_SEQUENCE_INVALID',
+      'Explicit semantic-id evidence must begin with compiler',
+      'manifest.json'
+    );
+  }
+
+  const transitions: Record<string, Set<string>> = {
+    retrieval_planner: new Set(['compiler']),
+    compiler: new Set(['retrieval_planner', 'generator']),
+    generator: new Set(['retrieval_planner', 'validator']),
+    validator: new Set(['patcher']),
+    patcher: new Set(['patcher']),
+  };
+
+  for (let index = 0; index < stages.length - 1; index += 1) {
+    const current = stages[index] as string;
+    const next = stages[index + 1] as string;
+    const allowed = transitions[current];
+    if (!allowed || !allowed.has(next)) {
+      addIssue(
+        errors,
+        'CALL_SEQUENCE_INVALID',
+        'Illegal live call transition: ' + current + ' -> ' + next,
+        'manifest.json'
+      );
+    }
+  }
+
+  const last = stages[stages.length - 1];
+  if (status === 'OUTPUT' && last !== 'validator' && last !== 'patcher') {
+    addIssue(
+      errors,
+      'CALL_SEQUENCE_INVALID',
+      'OUTPUT evidence must end with validator or patcher',
+      'manifest.json'
+    );
+  }
+  if (status === 'CONFLICT' && last !== 'compiler') {
+    addIssue(
+      errors,
+      'CALL_SEQUENCE_INVALID',
+      'CONFLICT evidence must end with compiler',
+      'manifest.json'
+    );
+  }
+  if (status === 'NEED_CONTEXT' && last !== 'retrieval_planner') {
+    addIssue(
+      errors,
+      'CALL_SEQUENCE_INVALID',
+      'NEED_CONTEXT evidence must end with retrieval_planner',
+      'manifest.json'
+    );
+  }
+}
+
+function validateTraceRetrieval(
+  value: unknown,
+  errors: LiveBundleVerificationIssue[]
+): void {
+  if (!Array.isArray(value)) {
+    addIssue(
+      errors,
+      'TRACE_RETRIEVAL_INVALID',
+      'trace.retrieval must be an array',
+      'trace.json'
+    );
+    return;
+  }
+  for (const raw of value) {
+    const item = asRecord(raw);
+    if (!item || !nonEmptyString(item.semantic_id) || !isSha256(item.content_hash)) {
+      addIssue(
+        errors,
+        'TRACE_RETRIEVAL_INVALID',
+        'trace.retrieval entries require a semantic_id and SHA-256 content_hash',
+        'trace.json'
+      );
+    }
+  }
+}
+
+function validateTraceMissing(
+  value: unknown,
+  errors: LiveBundleVerificationIssue[]
+): void {
+  if (!Array.isArray(value)) {
+    addIssue(
+      errors,
+      'TRACE_GENERATOR_NEED_CONTEXT_INVALID',
+      'trace.generator.need_context must be an array',
+      'trace.json'
+    );
+    return;
+  }
+  for (const group of value) {
+    if (!Array.isArray(group)) {
+      addIssue(
+        errors,
+        'TRACE_GENERATOR_NEED_CONTEXT_INVALID',
+        'Each need_context entry must be an array',
+        'trace.json'
+      );
+      continue;
+    }
+    for (const raw of group) {
+      const item = asRecord(raw);
+      if (
+        !item ||
+        !nonEmptyString(item.type) ||
+        !nonEmptyString(item.question) ||
+        (hasOwn(item, 'subject') && !nonEmptyString(item.subject))
+      ) {
+        addIssue(
+          errors,
+          'TRACE_GENERATOR_NEED_CONTEXT_INVALID',
+          'Generator missing-context entries require type/question and optional non-empty subject',
+          'trace.json'
+        );
+      }
+    }
+  }
+}
+
+function validateTraceScope(
+  value: unknown,
+  errors: LiveBundleVerificationIssue[]
+): void {
+  const scope = asRecord(value);
+  if (
+    !scope ||
+    !positiveSafeInteger(scope.paragraph) ||
+    !Array.isArray(scope.sentences) ||
+    scope.sentences.length !== 2 ||
+    !positiveSafeInteger(scope.sentences[0]) ||
+    !positiveSafeInteger(scope.sentences[1]) ||
+    (scope.sentences[1] as number) < (scope.sentences[0] as number)
+  ) {
+    addIssue(
+      errors,
+      'TRACE_PATCH_SCOPE_INVALID',
+      'trace.patcher.scopes contains an invalid patch scope',
+      'trace.json'
+    );
+  }
+}
+
 export async function verifyLiveFictionBundle(
   runDirInput: string
 ): Promise<LiveBundleVerificationReport> {
@@ -504,6 +672,43 @@ export async function verifyLiveFictionBundle(
       'Non-error manifest.runtime_contract must be an object',
       'manifest.json'
     );
+  } else if (status && status !== 'ERROR' && runtimeContract) {
+    if (!isSha256(runtimeContract.system_hash)) {
+      addIssue(
+        errors,
+        'RUNTIME_SYSTEM_HASH_INVALID',
+        'runtime_contract.system_hash must be a SHA-256 value',
+        'manifest.json'
+      );
+    }
+    if (!isSha256(runtimeContract.source_registry_hash)) {
+      addIssue(
+        errors,
+        'RUNTIME_REGISTRY_HASH_INVALID',
+        'runtime_contract.source_registry_hash must be a SHA-256 value',
+        'manifest.json'
+      );
+    }
+    const promptHashes = asRecord(runtimeContract.prompt_template_hashes);
+    if (!promptHashes) {
+      addIssue(
+        errors,
+        'RUNTIME_PROMPT_HASHES_INVALID',
+        'runtime_contract.prompt_template_hashes must be an object',
+        'manifest.json'
+      );
+    } else {
+      for (const stage of LIVE_STAGES) {
+        if (!isSha256(promptHashes[stage])) {
+          addIssue(
+            errors,
+            'RUNTIME_PROMPT_HASHES_INVALID',
+            'Missing or invalid prompt-template hash for ' + stage,
+            'manifest.json'
+          );
+        }
+      }
+    }
   }
 
   const manifestInput = asRecord(manifest.input);
@@ -562,6 +767,15 @@ export async function verifyLiveFictionBundle(
 
 
     if (status && status !== 'ERROR') {
+      if (typeof input.request !== 'string' || input.request.trim().length === 0) {
+        addIssue(
+          errors,
+          'INPUT_REQUEST_INVALID',
+          'Successful input.request must be a non-empty string',
+          'input.json'
+        );
+      }
+
       if (
         !Number.isSafeInteger(input.max_context_rounds) ||
         (input.max_context_rounds as number) < 1
@@ -861,37 +1075,32 @@ export async function verifyLiveFictionBundle(
       }
     }
 
-    if (status === 'OUTPUT') {
-      const firstCompiler = callStages.indexOf('compiler');
-      const firstGenerator = callStages.indexOf('generator');
-      const lastGenerator = callStages.lastIndexOf('generator');
-      const firstValidator = callStages.indexOf('validator');
-      const firstPatcher = callStages.indexOf('patcher');
+    if (status && status !== 'ERROR') {
+      validateSuccessfulCallSequence(
+        status,
+        callStages,
+        manifestInput?.semantic_ids,
+        errors
+      );
 
-      if (
-        firstCompiler < 0 ||
-        firstGenerator < 0 ||
-        firstValidator < 0 ||
-        firstCompiler > firstGenerator ||
-        lastGenerator > firstValidator ||
-        (firstPatcher >= 0 && firstPatcher < firstValidator)
-      ) {
+      const validatorCount = callStageCounts.get('validator') ?? 0;
+      const patcherCount = callStageCounts.get('patcher') ?? 0;
+      if (status === 'OUTPUT' && validatorCount !== 1) {
         addIssue(
           errors,
-          'CALL_SEQUENCE_INVALID',
-          'OUTPUT call order must preserve compiler -> generator -> validator -> patcher causality',
+          'CALL_STAGE_COUNT_INVALID',
+          'OUTPUT evidence requires exactly one validator call',
           'manifest.json'
         );
       }
-
       if (
-        manifestInput?.semantic_ids === null &&
-        callStages[0] !== 'retrieval_planner'
+        (status === 'NEED_CONTEXT' || status === 'CONFLICT') &&
+        (validatorCount !== 0 || patcherCount !== 0)
       ) {
         addIssue(
           errors,
-          'CALL_SEQUENCE_INVALID',
-          'Planner-driven OUTPUT evidence must begin with retrieval_planner',
+          'CALL_STAGE_FORBIDDEN',
+          status + ' evidence may not contain validator or patcher calls',
           'manifest.json'
         );
       }
@@ -936,6 +1145,16 @@ export async function verifyLiveFictionBundle(
       : null;
     const trace = asRecord(traceValue);
     if (trace) {
+      if (trace.version !== '0.5') {
+        addIssue(
+          errors,
+          'TRACE_VERSION_INVALID',
+          'trace.version must be 0.5',
+          'trace.json'
+        );
+      }
+      validateTraceRetrieval(trace.retrieval, errors);
+
       if (trace.run_id !== manifest.runtime_run_id) {
         addIssue(
           errors,
@@ -953,7 +1172,39 @@ export async function verifyLiveFictionBundle(
         );
       }
 
+      const compilerTrace = asRecord(trace.compiler);
+      if (
+        !compilerTrace ||
+        !Array.isArray(compilerTrace.active_context_hashes) ||
+        !Array.isArray(compilerTrace.provenance)
+      ) {
+        addIssue(
+          errors,
+          'TRACE_COMPILER_INVALID',
+          'trace.compiler must contain active_context_hashes and provenance arrays',
+          'trace.json'
+        );
+      } else {
+        if (compilerTrace.active_context_hashes.some((hash) => !isSha256(hash))) {
+          addIssue(
+            errors,
+            'TRACE_COMPILER_HASH_INVALID',
+            'trace.compiler.active_context_hashes must contain SHA-256 values',
+            'trace.json'
+          );
+        }
+        if (compilerTrace.provenance.some((item) => asRecord(item) === null)) {
+          addIssue(
+            errors,
+            'TRACE_COMPILER_PROVENANCE_INVALID',
+            'trace.compiler.provenance must contain objects',
+            'trace.json'
+          );
+        }
+      }
+
       const generatorTrace = asRecord(trace.generator);
+      let generatorCount: unknown = null;
       if (!generatorTrace) {
         addIssue(
           errors,
@@ -962,7 +1213,7 @@ export async function verifyLiveFictionBundle(
           'trace.json'
         );
       } else {
-        const generatorCount = generatorTrace.call_count;
+        generatorCount = generatorTrace.call_count;
         if (
           !Number.isSafeInteger(generatorCount) ||
           (generatorCount as number) < 0
@@ -985,31 +1236,137 @@ export async function verifyLiveFictionBundle(
           );
         }
 
+        if (!Array.isArray(generatorTrace.payload_hashes)) {
+          addIssue(
+            errors,
+            'TRACE_GENERATOR_PAYLOAD_INVALID',
+            'trace.generator.payload_hashes must be an array',
+            'trace.json'
+          );
+        } else {
+          if (generatorTrace.payload_hashes.some((hash) => !isSha256(hash))) {
+            addIssue(
+              errors,
+              'TRACE_GENERATOR_PAYLOAD_INVALID',
+              'trace.generator.payload_hashes must contain SHA-256 values',
+              'trace.json'
+            );
+          }
+          if (
+            Number.isSafeInteger(generatorCount) &&
+            generatorTrace.payload_hashes.length !== generatorCount
+          ) {
+            addIssue(
+              errors,
+              'TRACE_GENERATOR_PAYLOAD_COUNT_MISMATCH',
+              'trace.generator.payload_hashes length does not match call_count',
+              'trace.json'
+            );
+          }
+        }
+        validateTraceMissing(generatorTrace.need_context, errors);
+      }
+
+      if (
+        compilerTrace &&
+        Array.isArray(compilerTrace.active_context_hashes) &&
+        Array.isArray(compilerTrace.provenance) &&
+        Number.isSafeInteger(generatorCount)
+      ) {
         if (
-          Array.isArray(generatorTrace.payload_hashes) &&
-          Number.isSafeInteger(generatorCount) &&
-          generatorTrace.payload_hashes.length !== generatorCount
+          compilerTrace.active_context_hashes.length !== generatorCount ||
+          compilerTrace.provenance.length !== generatorCount
         ) {
           addIssue(
             errors,
-            'TRACE_GENERATOR_PAYLOAD_COUNT_MISMATCH',
-            'trace.generator.payload_hashes length does not match call_count',
+            'TRACE_COMPILER_READY_COUNT_MISMATCH',
+            'Each READY compiler result must correspond to one generator call',
             'trace.json'
           );
         }
       }
 
+      const validatorTrace = asRecord(trace.validator);
+      const validatorViolations =
+        validatorTrace && Array.isArray(validatorTrace.violations)
+          ? validatorTrace.violations
+          : null;
+      if (!validatorViolations) {
+        addIssue(
+          errors,
+          'TRACE_VALIDATOR_INVALID',
+          'trace.validator.violations must be an array',
+          'trace.json'
+        );
+      } else {
+        for (const rawViolation of validatorViolations) {
+          const violation = asRecord(rawViolation);
+          if (
+            !violation ||
+            !nonEmptyString(violation.id) ||
+            (violation.severity !== 'hard' && violation.severity !== 'soft') ||
+            !Array.isArray(violation.evidence_refs) ||
+            violation.evidence_refs.some((ref) => typeof ref !== 'string')
+          ) {
+            addIssue(
+              errors,
+              'TRACE_VALIDATOR_INVALID',
+              'trace.validator.violations contains an invalid entry',
+              'trace.json'
+            );
+          }
+        }
+      }
+
       const patcherTrace = asRecord(trace.patcher);
+      const patchScopes =
+        patcherTrace && Array.isArray(patcherTrace.scopes)
+          ? patcherTrace.scopes
+          : null;
+      if (!patchScopes) {
+        addIssue(
+          errors,
+          'TRACE_PATCHER_INVALID',
+          'trace.patcher.scopes must be an array',
+          'trace.json'
+        );
+      } else {
+        for (const scope of patchScopes) {
+          validateTraceScope(scope, errors);
+        }
+        if (
+          manifestCalls &&
+          patchScopes.length !== (callStageCounts.get('patcher') ?? 0)
+        ) {
+          addIssue(
+            errors,
+            'TRACE_PATCHER_CALL_COUNT_MISMATCH',
+            'trace.patcher.scopes length does not match patcher call evidence',
+            'trace.json'
+          );
+        }
+        if (
+          validatorViolations &&
+          patchScopes.length !== validatorViolations.length
+        ) {
+          addIssue(
+            errors,
+            'TRACE_PATCHER_VIOLATION_COUNT_MISMATCH',
+            'Each validator violation must correspond to exactly one patch scope',
+            'trace.json'
+          );
+        }
+      }
+
       if (
-        patcherTrace &&
-        Array.isArray(patcherTrace.scopes) &&
-        manifestCalls &&
-        patcherTrace.scopes.length !== (callStageCounts.get('patcher') ?? 0)
+        (status === 'NEED_CONTEXT' || status === 'CONFLICT') &&
+        ((validatorViolations?.length ?? 0) !== 0 ||
+          (patchScopes?.length ?? 0) !== 0)
       ) {
         addIssue(
           errors,
-          'TRACE_PATCHER_CALL_COUNT_MISMATCH',
-          'trace.patcher.scopes length does not match patcher call evidence',
+          'TRACE_STATUS_CAUSALITY_INVALID',
+          status + ' trace may not contain validation or patch activity',
           'trace.json'
         );
       }
