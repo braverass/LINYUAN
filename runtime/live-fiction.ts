@@ -2,6 +2,8 @@ import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, open, readFile, readdir, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import { detectGitCommit } from './git';
+
 import {
   createModelBackedRuntime,
   MODEL_PROMPT_TEMPLATES,
@@ -181,22 +183,6 @@ async function writeTracked(
     sha256: sha256Text(content),
     bytes: Buffer.byteLength(content, 'utf8'),
   };
-}
-
-async function detectGitCommit(repoRoot: string): Promise<string> {
-  if (process.env.GITHUB_SHA) return process.env.GITHUB_SHA;
-  if (process.env.LINYUAN_COMMIT) return process.env.LINYUAN_COMMIT;
-
-  try {
-    const head = (await readFile(path.join(repoRoot, '.git/HEAD'), 'utf8')).trim();
-    if (!head.startsWith('ref: ')) return head;
-    const refPath = head.slice(5).trim();
-    return (
-      await readFile(path.join(repoRoot, '.git', refPath), 'utf8')
-    ).trim();
-  } catch {
-    return 'UNKNOWN';
-  }
 }
 
 function descriptor(client: ModelClient): {
