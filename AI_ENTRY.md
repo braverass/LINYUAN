@@ -24,7 +24,8 @@
 
 - semantic ID / physical path：`SOURCE_REGISTRY.yaml`
 - retrieval / compilation：`00A-按需读取与写作执行协议.md`
-- executable boundary：`runtime/orchestrator.ts`
+- FICTION executable boundary：`runtime/orchestrator.ts`
+- EXPLAIN executable boundary：`runtime/explain.ts`
 - IR：`runtime/schemas/ACTIVE_CONTEXT.schema.yaml`
 - validation：`runtime/schemas/VALIDATION.schema.yaml`
 - patching：`runtime/schemas/PATCH.schema.yaml`
