@@ -685,3 +685,44 @@ test('adversarial: non-output success states cannot be justified by an unrelated
     await rm(runDir, { recursive: true, force: true });
   }
 });
+
+
+test('adversarial: verifier rejects overlapping patch scopes even when counts are self-consistent', async () => {
+  const runDir = await mkdtemp(path.join(os.tmpdir(), 'linyuan-adv-overlap-scopes-'));
+  try {
+    await validBundle(runDir);
+    const manifestPath = path.join(runDir, 'manifest.json');
+    const manifest = await readJson(manifestPath);
+    const calls = await readJson(path.join(runDir, 'calls.json'));
+    const trace = await readJson(path.join(runDir, 'trace.json'));
+
+    const templateCall = structuredClone(calls[calls.length - 1]);
+    templateCall.stage = 'patcher';
+    templateCall.request_hash = 'a'.repeat(64);
+    templateCall.response_hash = 'b'.repeat(64);
+    calls.push(structuredClone(templateCall), structuredClone(templateCall));
+    manifest.calls = JSON.parse(JSON.stringify(calls));
+
+    trace.validator.violations = [
+      { id: 'V1', severity: 'hard', evidence_refs: [] },
+      { id: 'V2', severity: 'hard', evidence_refs: [] },
+    ];
+    trace.patcher.scopes = [
+      { paragraph: 1, sentences: [1, 2] },
+      { paragraph: 1, sentences: [2, 3] },
+    ];
+
+    await writeTrackedJson(runDir, 'calls.json', calls, manifest);
+    await writeTrackedJson(runDir, 'trace.json', trace, manifest);
+    await writeFile(manifestPath, JSON.stringify(manifest, null, 2) + '\n', 'utf8');
+
+    const report = await verifyLiveFictionBundle(runDir);
+    assert.equal(report.ok, false);
+    assert.equal(
+      report.errors.some((issue) => issue.code === 'TRACE_PATCH_SCOPE_OVERLAP'),
+      true
+    );
+  } finally {
+    await rm(runDir, { recursive: true, force: true });
+  }
+});
