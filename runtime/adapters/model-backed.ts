@@ -2,6 +2,7 @@ import type { CompilerModelOutput } from '../compiler';
 import type { GenerationResult, GeneratorPayload } from '../generator';
 import type {
   InitialRetrievalPlannerAdapter,
+  PatchApplication,
   RuntimeAdapters,
 } from '../orchestrator';
 import type { PatchModelOutput, PatcherPayload } from '../patcher';
@@ -40,6 +41,7 @@ export interface ModelBackedArtifacts {
     payload: PatcherPayload;
     output: PatchModelOutput;
   }>;
+  patch_applications: PatchApplication[];
 }
 
 export interface ModelBackedRuntime {
@@ -155,6 +157,7 @@ export async function createModelBackedRuntime(
     generator_calls: [],
     validator_calls: [],
     patcher_calls: [],
+    patch_applications: [],
   };
 
   const planInitialRetrieval: InitialRetrievalPlannerAdapter = async (
@@ -291,6 +294,10 @@ export async function createModelBackedRuntime(
         violations: structuredClone(violations),
       });
       return violations;
+    },
+
+    observePatch: (application) => {
+      artifacts.patch_applications.push(structuredClone(application));
     },
 
     patch: async (payload) => {
