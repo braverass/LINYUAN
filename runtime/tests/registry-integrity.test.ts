@@ -72,3 +72,89 @@ test('registered source paths stay inside repoRoot and resolve to regular files'
     await rm(outside, { recursive: true, force: true });
   }
 });
+
+
+test('SOURCE_REGISTRY rejects malformed source/access shapes before runtime use', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'linyuan-registry-shape-'));
+  try {
+    const missingRole = path.join(root, 'missing-role.yaml');
+    await writeFile(
+      missingRole,
+      [
+        'version: "0.5"',
+        'sources:',
+        '  TEST.SOURCE:',
+        '    path: "canon.md"',
+        '    authority: "L0"',
+        '    content_role: "author_canon"',
+        '    instruction_capability: false',
+        '    access:',
+        '      retriever: read',
+        '      orchestrator: read',
+        '      compiler: read',
+        '      generator: deny',
+        '      validator: read',
+      ].join('\n'),
+      'utf8'
+    );
+    await assert.rejects(
+      () => loadRegistry(missingRole),
+      /access.patcher must be read or deny/
+    );
+
+    const invalidPermission = path.join(root, 'invalid-permission.yaml');
+    await writeFile(
+      invalidPermission,
+      [
+        'version: "0.5"',
+        'sources:',
+        '  TEST.SOURCE:',
+        '    path: "canon.md"',
+        '    authority: "L0"',
+        '    content_role: "author_canon"',
+        '    instruction_capability: false',
+        '    access:',
+        '      retriever: execute',
+        '      orchestrator: read',
+        '      compiler: read',
+        '      generator: deny',
+        '      validator: read',
+        '      patcher: deny',
+      ].join('\n'),
+      'utf8'
+    );
+    await assert.rejects(
+      () => loadRegistry(invalidPermission),
+      /access.retriever must be read or deny/
+    );
+
+    const extraField = path.join(root, 'extra-field.yaml');
+    await writeFile(
+      extraField,
+      [
+        'version: "0.5"',
+        'sources:',
+        '  TEST.SOURCE:',
+        '    path: "canon.md"',
+        '    authority: "L0"',
+        '    content_role: "author_canon"',
+        '    instruction_capability: false',
+        '    unexpected: true',
+        '    access:',
+        '      retriever: read',
+        '      orchestrator: read',
+        '      compiler: read',
+        '      generator: deny',
+        '      validator: read',
+        '      patcher: deny',
+      ].join('\n'),
+      'utf8'
+    );
+    await assert.rejects(
+      () => loadRegistry(extraField),
+      /unexpected field/
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
