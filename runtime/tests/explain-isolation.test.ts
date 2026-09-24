@@ -101,16 +101,41 @@ test('EXPLAIN default output rejects semantic-id/process leakage', async () => {
   );
 });
 
-test('EXPLAIN evidence-rich context is not reused as FICTION model history', async () => {
-  const sentinel = 'EXPLAIN_ONLY_SENTINEL_9182';
+test('EXPLAIN planner selects Canon without exposing planner state', async () => {
+  const stages: string[] = [];
   const explainClient = client((request) => {
-    assert.equal(request.prompt.includes(sentinel), false);
-    return JSON.stringify({ answer: '解释完成。' });
+    stages.push(request.stage);
+    if (request.stage === 'retrieval_planner') {
+      return JSON.stringify({ semantic_ids: ['AUTHOR.PERSONALITY'] });
+    }
+    if (request.stage === 'explain') {
+      return JSON.stringify({ answer: '规划后直接回答。' });
+    }
+    throw new Error('unexpected stage ' + request.stage);
   });
+
+  const run = await runProductionExplain(
+    { request: '解释人物' },
+    {
+      retrievalPlanner: explainClient,
+      explainer: explainClient,
+    }
+  );
+
+  assert.deepEqual(stages, ['retrieval_planner', 'explain']);
+  assert.deepEqual(run.semantic_ids, ['AUTHOR.PERSONALITY']);
+  assert.equal(run.answer, '规划后直接回答。');
+});
+
+test('EXPLAIN context is not reused as FICTION model history', async () => {
+  const sentinel = 'EXPLAIN_ONLY_SENTINEL_9182';
+  const explainClient = client(() =>
+    JSON.stringify({ answer: '解释完成。' })
+  );
 
   const explainRun = await runProductionExplain(
     {
-      request: '解释人物',
+      request: '解释人物：' + sentinel,
       semanticIds: ['AUTHOR.PERSONALITY'],
     },
     {
