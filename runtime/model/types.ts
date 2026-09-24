@@ -47,6 +47,8 @@ export interface ModelClient {
   readonly provider: ModelProvider;
   readonly model: string;
   readonly defaults: ModelDefaults;
+  readonly endpoint_kind?: 'official' | 'custom';
+  readonly endpoint_hash?: string;
   complete(request: ModelRequest): Promise<ModelResponse>;
 }
 
