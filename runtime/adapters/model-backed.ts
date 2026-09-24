@@ -11,6 +11,7 @@ import { stableHash } from '../trace';
 import type { Violation } from '../types';
 import type { ValidatorInput } from '../validator';
 import { parseJsonObject } from '../model/json';
+import { validateModelResponse } from '../model/evidence';
 import type {
   ModelCallRecord,
   ModelClient,
