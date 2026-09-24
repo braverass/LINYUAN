@@ -10,7 +10,7 @@ It deliberately does **not** claim cryptographic authenticity against an attacke
 
 A syntactically valid `commit_sha` is therefore not, by itself, proof that the bundle was produced by that repository commit. Offline verification preserves that compatibility boundary.
 
-When `fiction:verify` is invoked with `--repo-root <checkout>`, the verifier additionally binds the bundle to the actual checked-out Git commit (ignoring commit environment overrides), requires no tracked worktree changes, binds `SOURCE_REGISTRY.yaml`, re-resolves every recorded retrieval semantic ID and recomputes its Canon content hash, checks executable model prompt templates, and checks the default `MODE-FICTION.md` system contract when no custom system was used. This strengthens repository provenance but still does not prove that an external provider served the recorded calls.
+When `fiction:verify` is invoked with `--repo-root <checkout>`, the verifier additionally binds the bundle to the actual checked-out Git commit (ignoring commit environment overrides), requires no tracked worktree changes, binds `SOURCE_REGISTRY.yaml`, re-resolves every recorded retrieval semantic ID and recomputes its Canon content hash, checks both the short prompt-template hashes and the executable `runtime/adapters/model-backed.ts` source hash, and checks the default `MODE-FICTION.md` system contract when no custom system was used. This strengthens repository provenance but still does not prove that an external provider served the recorded calls.
 
 ## Single-use run directories
 
@@ -45,6 +45,7 @@ The verifier checks:
 - When a custom `system_override` is recorded for a successful run, its content is bound to `runtime_contract.system_hash`.
 - `calls.json` exactly matches `manifest.calls`.
 - Call hashes, latency, usage, settings, provider identity, configured/requested model identity, provider-returned model identity, and request/response identifiers have valid shapes.
+- Stage model descriptors may record non-secret endpoint provenance as `endpoint_kind: official|custom` plus a SHA-256 of the resolved base URL. The raw endpoint URL is not stored.
 - Recorded call settings agree with the configured stage-model defaults used by the live runtime.
 - Non-error call records must follow the executable runtime state machine; `OUTPUT`, `NEED_CONTEXT`, and `CONFLICT` each have valid terminal stages and forbidden stage combinations.
 - Successful/non-error `trace.json` uses the supported trace version and validates retrieval hashes, compiler READY evidence, generator payload hashes/missing-context shape, validator summaries, and patch scopes.
@@ -63,6 +64,8 @@ Live call records distinguish two provider-native identifiers when available:
 - `response_id` is the provider response object identifier from the JSON payload, such as an OpenAI response ID, Gemini `responseId`, or Claude message ID.
 
 The two identifiers are intentionally not conflated. Model identity is likewise split: `requested_model` records the configured model ID sent by the runtime, while `model` records the provider-returned model ID. This permits normal alias-to-snapshot resolution without losing the configured identity.
+
+Provider label and network endpoint are also kept distinct. A client configured with a custom OpenAI/Gemini/Anthropic-compatible base URL records `endpoint_kind: custom` and only the endpoint hash; it is not represented as evidence of direct contact with the provider's official endpoint.
 
 Older 0.9 bundles without `response_id` or `requested_model` remain valid when the rest of the preserved evidence satisfies the current verifier.
 
