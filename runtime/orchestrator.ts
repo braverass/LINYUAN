@@ -17,7 +17,6 @@ import {
   envelope,
   MissingContext,
   Provenance,
-  PatchScope,
   Violation,
 } from './types';
 import {
@@ -45,12 +44,6 @@ export type InitialRetrievalPlannerAdapter = (
   sceneState: Record<string, unknown>
 ) => Promise<string[]>;
 
-export interface PatchApplication {
-  before: string;
-  after: string;
-  scope: PatchScope;
-}
-
 export interface RuntimeAdapters {
   retrieve: RetrieverAdapter;
   planInitialRetrieval?: InitialRetrievalPlannerAdapter;
@@ -59,7 +52,6 @@ export interface RuntimeAdapters {
   generate: GeneratorAdapter;
   validate: ValidatorAdapter;
   patch: PatchAdapter;
-  observePatch?: (application: PatchApplication) => void;
 }
 
 export interface FictionRunInput {
@@ -242,17 +234,11 @@ export async function runFiction(
       trace.patcher.scopes.push(
         structuredClone(patchVisible.patch_contract.allowed_scope)
       );
-      const beforePatch = output;
       output = await patchWithAdapter(
         adapters.patch,
         output,
         patchVisible
       );
-      adapters.observePatch?.({
-        before: beforePatch,
-        after: output,
-        scope: structuredClone(patchVisible.patch_contract.allowed_scope),
-      });
     }
 
     return {
