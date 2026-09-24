@@ -17,6 +17,14 @@ export interface ProviderConfig {
   defaults?: ModelDefaults;
 }
 
+export interface ModelEnvironmentDescriptor {
+  provider: ModelProvider;
+  model: string;
+  defaults: ModelDefaults;
+  endpoint_kind: 'official' | 'custom';
+  endpoint_hash: string;
+}
+
 function numberFromEnv(value: string | undefined): number | undefined {
   if (value === undefined || value.trim() === '') return undefined;
   const parsed = Number(value);
@@ -32,6 +40,31 @@ function cleanBaseUrl(value: string): string {
 
 function endpointHash(value: string): string {
   return createHash('sha256').update(value).digest('hex');
+}
+
+function officialBaseUrl(provider: ModelProvider): string {
+  if (provider === 'openai') return 'https://api.openai.com/v1';
+  if (provider === 'gemini') {
+    return 'https://generativelanguage.googleapis.com/v1beta';
+  }
+  return 'https://api.anthropic.com';
+}
+
+function resolveModelEndpoint(
+  provider: ModelProvider,
+  configuredBaseUrl?: string
+): {
+  baseUrl: string;
+  endpoint_kind: 'official' | 'custom';
+  endpoint_hash: string;
+} {
+  const official = officialBaseUrl(provider);
+  const baseUrl = cleanBaseUrl(configuredBaseUrl ?? official);
+  return {
+    baseUrl,
+    endpoint_kind: baseUrl === official ? 'official' : 'custom',
+    endpoint_hash: endpointHash(baseUrl),
+  };
 }
 
 function sanitizeProviderErrorDetail(
@@ -188,12 +221,12 @@ function openAIText(data: Record<string, unknown>): string {
 
 function createOpenAIClient(config: ProviderConfig): ModelClient {
   const defaults = config.defaults ?? {};
-  const officialBaseUrl = 'https://api.openai.com/v1';
-  const baseUrl = cleanBaseUrl(config.baseUrl ?? officialBaseUrl);
+  const endpoint = resolveModelEndpoint('openai', config.baseUrl);
+  const baseUrl = endpoint.baseUrl;
 
   return {
-    endpoint_kind: baseUrl === officialBaseUrl ? 'official' : 'custom',
-    endpoint_hash: endpointHash(baseUrl),
+    endpoint_kind: endpoint.endpoint_kind,
+    endpoint_hash: endpoint.endpoint_hash,
     provider: 'openai',
     model: config.model,
     defaults,
@@ -255,14 +288,12 @@ function createOpenAIClient(config: ProviderConfig): ModelClient {
 
 function createGeminiClient(config: ProviderConfig): ModelClient {
   const defaults = config.defaults ?? {};
-  const officialBaseUrl = 'https://generativelanguage.googleapis.com/v1beta';
-  const baseUrl = cleanBaseUrl(
-    config.baseUrl ?? officialBaseUrl
-  );
+  const endpoint = resolveModelEndpoint('gemini', config.baseUrl);
+  const baseUrl = endpoint.baseUrl;
 
   return {
-    endpoint_kind: baseUrl === officialBaseUrl ? 'official' : 'custom',
-    endpoint_hash: endpointHash(baseUrl),
+    endpoint_kind: endpoint.endpoint_kind,
+    endpoint_hash: endpoint.endpoint_hash,
     provider: 'gemini',
     model: config.model,
     defaults,
@@ -354,12 +385,12 @@ function createGeminiClient(config: ProviderConfig): ModelClient {
 
 function createAnthropicClient(config: ProviderConfig): ModelClient {
   const defaults = config.defaults ?? {};
-  const officialBaseUrl = 'https://api.anthropic.com';
-  const baseUrl = cleanBaseUrl(config.baseUrl ?? officialBaseUrl);
+  const endpoint = resolveModelEndpoint('anthropic', config.baseUrl);
+  const baseUrl = endpoint.baseUrl;
 
   return {
-    endpoint_kind: baseUrl === officialBaseUrl ? 'official' : 'custom',
-    endpoint_hash: endpointHash(baseUrl),
+    endpoint_kind: endpoint.endpoint_kind,
+    endpoint_hash: endpoint.endpoint_hash,
     provider: 'anthropic',
     model: config.model,
     defaults,
@@ -437,12 +468,18 @@ function providerKey(provider: ModelProvider): string | undefined {
   return process.env.ANTHROPIC_API_KEY;
 }
 
-export function createModelClientFromEnv(stage: string): ModelClient {
+export function modelDescriptorFromEnv(
+  stage: string
+): ModelEnvironmentDescriptor | null {
   const prefix = 'LINYUAN_' + stage.toUpperCase() + '_';
   const providerRaw =
     process.env[prefix + 'PROVIDER'] ?? process.env.LINYUAN_MODEL_PROVIDER;
   const model =
     process.env[prefix + 'MODEL'] ?? process.env.LINYUAN_MODEL_ID;
+
+  if (providerRaw === undefined && model === undefined) {
+    return null;
+  }
 
   if (
     providerRaw !== 'openai' &&
@@ -456,14 +493,6 @@ export function createModelClientFromEnv(stage: string): ModelClient {
   }
   if (!model) {
     throw new Error(prefix + 'MODEL or LINYUAN_MODEL_ID is required');
-  }
-
-  const apiKey =
-    process.env[prefix + 'API_KEY'] ??
-    process.env.LINYUAN_MODEL_API_KEY ??
-    providerKey(providerRaw);
-  if (!apiKey) {
-    throw new Error('No API key configured for provider ' + providerRaw);
   }
 
   const defaults: ModelDefaults = {};
@@ -484,14 +513,46 @@ export function createModelClientFromEnv(stage: string): ModelClient {
   if (topP !== undefined) defaults.topP = topP;
   if (maxOutputTokens !== undefined) defaults.maxOutputTokens = maxOutputTokens;
   if (seed !== undefined) defaults.seed = seed;
+  validateModelSettings(defaults);
+
+  const baseUrl =
+    process.env[prefix + 'BASE_URL'] ?? process.env.LINYUAN_MODEL_BASE_URL;
+  const endpoint = resolveModelEndpoint(providerRaw, baseUrl);
+
+  return {
+    provider: providerRaw,
+    model,
+    defaults,
+    endpoint_kind: endpoint.endpoint_kind,
+    endpoint_hash: endpoint.endpoint_hash,
+  };
+}
+
+export function createModelClientFromEnv(stage: string): ModelClient {
+  const prefix = 'LINYUAN_' + stage.toUpperCase() + '_';
+  const descriptor = modelDescriptorFromEnv(stage);
+  if (!descriptor) {
+    throw new Error(
+      prefix +
+        'PROVIDER/MODEL or LINYUAN_MODEL_PROVIDER/LINYUAN_MODEL_ID is required'
+    );
+  }
+
+  const apiKey =
+    process.env[prefix + 'API_KEY'] ??
+    process.env.LINYUAN_MODEL_API_KEY ??
+    providerKey(descriptor.provider);
+  if (!apiKey) {
+    throw new Error('No API key configured for provider ' + descriptor.provider);
+  }
 
   const baseUrl =
     process.env[prefix + 'BASE_URL'] ?? process.env.LINYUAN_MODEL_BASE_URL;
   const config: ProviderConfig = {
-    provider: providerRaw,
-    model,
+    provider: descriptor.provider,
+    model: descriptor.model,
     apiKey,
-    defaults,
+    defaults: descriptor.defaults,
   };
   if (baseUrl) config.baseUrl = baseUrl;
   return createModelClient(config);
