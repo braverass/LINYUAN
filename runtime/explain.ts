@@ -36,6 +36,22 @@ export interface ProductionExplainRun {
   calls: ModelCallRecord[];
 }
 
+export interface PublicExplainOutput {
+  answer: string;
+  evidence_summary?: string;
+}
+
+export function publicExplainOutput(
+  run: ProductionExplainRun
+): PublicExplainOutput {
+  return run.evidence_summary === undefined
+    ? { answer: run.answer }
+    : {
+        answer: run.answer,
+        evidence_summary: run.evidence_summary,
+      };
+}
+
 function createClientsFromEnv(): ExplainModelClients {
   return {
     retrievalPlanner: createModelClientFromEnv('retrieval'),
@@ -116,21 +132,43 @@ function validateSemanticIds(
   return ids;
 }
 
+function containsLiteral(text: string, literal: string): boolean {
+  return literal.length > 0 && text.toLowerCase().includes(literal.toLowerCase());
+}
+
+const HIDDEN_PROCESS_LITERALS = [
+  'SOURCE_REGISTRY',
+  'Retrieval Planner',
+  'retrieval_planner',
+  'Retriever',
+  'Compiler',
+  'provenance',
+  'content_hash',
+  'source_id',
+];
+
+function assertNoHiddenProcessLeak(text: string): void {
+  if (
+    HIDDEN_PROCESS_LITERALS.some((literal) => containsLiteral(text, literal))
+  ) {
+    throw new Error('EXPLAIN output exposes hidden retrieval/process metadata');
+  }
+}
+
 function assertDefaultAnswerDoesNotExposeInternals(
   answer: string,
-  semanticIds: string[]
+  semanticIds: string[],
+  sourcePaths: string[]
 ): void {
-  const forbiddenLiterals = [
+  assertNoHiddenProcessLeak(answer);
+  const sourceLiterals = [
     ...semanticIds,
-    'SOURCE_REGISTRY',
-    'Retrieval Planner',
-    'retrieval_planner',
-    'Retriever',
+    ...sourcePaths,
+    ...sourcePaths.map((sourcePath) => path.basename(sourcePath)),
   ];
-
-  if (forbiddenLiterals.some((literal) => literal && answer.includes(literal))) {
+  if (sourceLiterals.some((literal) => containsLiteral(answer, literal))) {
     throw new Error(
-      'EXPLAIN default output exposes internal retrieval metadata; rerun with an answer-only response'
+      'EXPLAIN default output exposes internal source metadata; request evidence explicitly'
     );
   }
 }
@@ -175,6 +213,13 @@ export async function runProductionExplain(
     repoRoot,
     registry,
   });
+  const sourcePaths = semanticIds.map((semanticId) => {
+    const source = registry.sources[semanticId];
+    if (!source) {
+      throw new Error('Missing registry source after access validation: ' + semanticId);
+    }
+    return source.path;
+  });
   const mode = await readFile(path.join(repoRoot, 'MODE-EXPLAIN.md'), 'utf8');
   const includeEvidence = input.includeEvidence === true;
 
@@ -212,7 +257,11 @@ export async function runProductionExplain(
   }
 
   if (!includeEvidence) {
-    assertDefaultAnswerDoesNotExposeInternals(parsed.answer, semanticIds);
+    assertDefaultAnswerDoesNotExposeInternals(
+      parsed.answer,
+      semanticIds,
+      sourcePaths
+    );
     return {
       answer: parsed.answer,
       semantic_ids: [...semanticIds],
@@ -228,6 +277,9 @@ export async function runProductionExplain(
       'EXPLAIN evidence mode must return a non-empty evidence_summary string'
     );
   }
+
+  assertNoHiddenProcessLeak(parsed.answer);
+  assertNoHiddenProcessLeak(parsed.evidence_summary);
 
   return {
     answer: parsed.answer,
