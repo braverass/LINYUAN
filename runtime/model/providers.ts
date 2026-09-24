@@ -50,6 +50,10 @@ function officialBaseUrl(provider: ModelProvider): string {
   return 'https://api.anthropic.com';
 }
 
+export function officialModelEndpointHash(provider: ModelProvider): string {
+  return endpointHash(officialBaseUrl(provider));
+}
+
 function resolveModelEndpoint(
   provider: ModelProvider,
   configuredBaseUrl?: string
