@@ -4,6 +4,7 @@ import {
   Violation,
 } from './types';
 import type { RawCanonFragment } from './compiler';
+import { validateViolations } from './contracts';
 
 export interface ValidatorInput {
   draft: string;
@@ -23,14 +24,7 @@ export async function validateWithAdapter(
   input: ValidatorInput
 ): Promise<Violation[]> {
   const violations = await adapter(structuredClone(input));
-
-  for (const violation of violations) {
-    if (!violation.id || !violation.patch_contract) {
-      throw new Error('Validator must return structured violations');
-    }
-  }
-
-  return violations.map((violation) => structuredClone(violation));
+  return validateViolations(violations);
 }
 
 export function stripEvidenceForPatcher(
