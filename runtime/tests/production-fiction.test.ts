@@ -139,3 +139,80 @@ test('production fiction entry runs retrieval through local patching', async () 
     { paragraph: 1, sentences: [2, 2] },
   ]);
 });
+
+
+test('production runtime rejects a model response from a different provider', async () => {
+  const client: ModelClient = {
+    provider: 'openai',
+    model: 'fixture-model',
+    defaults: {},
+    async complete(): Promise<ModelResponse> {
+      return {
+        provider: 'gemini',
+        model: 'fixture-model',
+        text: '{}',
+        latencyMs: 1,
+      };
+    },
+  };
+  const clients: RuntimeModelClients = {
+    retrievalPlanner: client,
+    compiler: client,
+    generator: client,
+    validator: client,
+    patcher: client,
+  };
+
+  await assert.rejects(
+    () =>
+      runProductionFiction(
+        {
+          request: 'fixture',
+          sceneState: {},
+          system: 'fixture system',
+          repoRoot: process.cwd(),
+        },
+        clients
+      ),
+    /provider does not match configured client provider/
+  );
+});
+
+test('production runtime rejects invalid usage metadata before recording evidence', async () => {
+  const client: ModelClient = {
+    provider: 'openai',
+    model: 'fixture-model',
+    defaults: {},
+    async complete(request): Promise<ModelResponse> {
+      assert.equal(request.stage, 'compiler');
+      return {
+        provider: 'openai',
+        model: 'fixture-model',
+        text: '{}',
+        latencyMs: 1,
+        usage: { totalTokens: -1 },
+      };
+    },
+  };
+  const clients: RuntimeModelClients = {
+    retrievalPlanner: client,
+    compiler: client,
+    generator: client,
+    validator: client,
+    patcher: client,
+  };
+
+  await assert.rejects(
+    () =>
+      runProductionFiction(
+        {
+          request: 'fixture',
+          semanticIds: ['AUTHOR.PERSONALITY'],
+          system: 'fixture system',
+          repoRoot: process.cwd(),
+        },
+        clients
+      ),
+    /usage.totalTokens must be a non-negative safe integer/
+  );
+});
