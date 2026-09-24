@@ -16,6 +16,10 @@ const current: BaselineProvenanceSnapshot = {
     compiler: 'prompt-compiler',
     generator: 'prompt-generator',
   },
+  evaluation_contract_hashes: {
+    judge: 'judge-source',
+    metrics: 'metrics-source',
+  },
   source_hashes: {
     'CANON.A': 'source-a',
     'CANON.B': 'source-b',
@@ -31,6 +35,9 @@ function manifest(): RealEvalManifest {
     report_hash: 'report',
     stage_models: {},
     prompt_template_hashes: { ...current.prompt_template_hashes },
+    evaluation_contract_hashes: {
+      ...current.evaluation_contract_hashes,
+    },
     source_hashes: { ...current.source_hashes },
     calls: [],
   };
@@ -190,5 +197,16 @@ test('baseline model evidence rejects requested-model or settings drift', () => 
   assert.throws(
     () => assertBaselineModelEvidence(wrongSettings),
     /call settings differ/
+  );
+});
+
+
+test('baseline provenance rejects changed evaluator implementation', () => {
+  const changed = manifest();
+  changed.evaluation_contract_hashes.metrics = 'old-metrics-source';
+
+  assert.throws(
+    () => assertBaselineProvenance(changed, current),
+    /evaluation_contract_hashes/
   );
 });
