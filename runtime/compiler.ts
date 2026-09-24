@@ -5,6 +5,11 @@ import {
   Provenance,
   envelope,
 } from './types';
+import {
+  validateActiveContextShape,
+  validateMissingContexts,
+  validateProvenance,
+} from './contracts';
 
 export interface RawCanonFragment {
   semanticId: string;
@@ -80,27 +85,9 @@ function assertNoForbiddenKeys(value: unknown, path = 'active_context'): void {
 }
 
 export function sanitizeActiveContext(context: ActiveContext): ActiveContext {
-  assertNoForbiddenKeys(context);
-
-  if (context.version !== '0.5') {
-    throw new Error('ACTIVE_CONTEXT version must be 0.5');
-  }
-
-  const requiredDimensions = [
-    'action_selection',
-    'dialogue_realization',
-    'pacing',
-    'nonverbal_behavior',
-    'emotional_expression',
-  ] as const;
-
-  for (const key of requiredDimensions) {
-    if (typeof context.open_dimensions?.[key] !== 'boolean') {
-      throw new Error(`ACTIVE_CONTEXT open_dimensions.${key} must be boolean`);
-    }
-  }
-
-  return canonicalizeActiveContext(structuredClone(context));
+  const validated = validateActiveContextShape(context);
+  assertNoForbiddenKeys(validated);
+  return canonicalizeActiveContext(validated);
 }
 
 function sortById<T extends { id: string }>(items: T[]): T[] {
@@ -147,17 +134,28 @@ export async function compileWithAdapter(
     canonFragments: input.canonFragments.map((fragment) => ({ ...fragment })),
   });
 
+  if (
+    output.status !== 'READY' &&
+    output.status !== 'NEED_CONTEXT' &&
+    output.status !== 'CONFLICT'
+  ) {
+    throw new Error('Compiler returned an unsupported status');
+  }
+
   if (output.status === 'NEED_CONTEXT') {
     return {
       status: 'NEED_CONTEXT',
-      missing: output.missing ?? [],
+      missing: validateMissingContexts(output.missing ?? [], 'compiler.missing'),
     };
   }
 
   if (output.status === 'CONFLICT') {
+    if (typeof output.conflict !== 'string' || output.conflict.trim().length === 0) {
+      throw new Error('Compiler returned CONFLICT without a non-empty conflict');
+    }
     return {
       status: 'CONFLICT',
-      conflict: output.conflict ?? 'Unresolved Canon conflict',
+      conflict: output.conflict,
     };
   }
 
@@ -169,6 +167,9 @@ export async function compileWithAdapter(
   return {
     status: 'READY',
     activeContext: envelope('ACTIVE_CONTEXT', activeContext),
-    provenance: envelope('PROVENANCE', output.provenance ?? {}),
+    provenance: envelope(
+      'PROVENANCE',
+      validateProvenance(output.provenance ?? {})
+    ),
   };
 }
