@@ -44,9 +44,9 @@ The verifier checks:
 - `calls.json` exactly matches `manifest.calls`.
 - Call hashes, latency, usage, settings, provider/model identity, and request/response identifiers have valid shapes.
 - Recorded call settings agree with the configured stage-model defaults used by the live runtime.
-- `OUTPUT` call records preserve runtime causality: compiler before generation, final generation before validation, and patching only after validation.
-- Successful/non-error `trace.json` agrees with the runtime run ID and retrieval evidence in the manifest.
-- Generator call counts and patcher scope counts in the trace agree with recorded model calls.
+- Non-error call records must follow the executable runtime state machine; `OUTPUT`, `NEED_CONTEXT`, and `CONFLICT` each have valid terminal stages and forbidden stage combinations.
+- Successful/non-error `trace.json` uses the supported trace version and validates retrieval hashes, compiler READY evidence, generator payload hashes/missing-context shape, validator summaries, and patch scopes.
+- Generator call counts, compiler READY counts, validator violations, and patcher scopes agree with recorded model calls and with each other.
 - `result.json.status` agrees with the manifest status.
 - For `OUTPUT`, the runtime output reconstructed from `output.md` agrees with `result.output_hash`.
 - For `ERROR`, `failure.json` exactly matches `manifest.failure`.
