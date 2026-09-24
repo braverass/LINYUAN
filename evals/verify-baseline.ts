@@ -49,6 +49,7 @@ console.log(
       commit_sha: manifest.commit_sha,
       case_set_hash: manifest.case_set_hash,
       prompt_template_hashes_verified: true,
+      evaluation_contract_hashes_verified: true,
       source_hashes_verified: true,
       model_evidence_consistent: true,
       stage_models_verified: expectedStageModels !== null,
