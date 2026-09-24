@@ -15,6 +15,14 @@ import type {
 } from '../runtime/model/types';
 import type { EvalCase, EvalSuiteReport } from './types';
 
+export const EVALUATION_CONTRACT_FILES = {
+  judge: 'evals/judge.ts',
+  metrics: 'evals/metrics.ts',
+  candidate_boundary: 'evals/candidate-boundary.ts',
+  real_executor: 'evals/real-executor.ts',
+  patch_locality: 'evals/patch-locality.ts',
+} as const;
+
 export interface RealEvalManifest {
   version: '0.7';
   created_at: string;
@@ -32,6 +40,7 @@ export interface RealEvalManifest {
     }
   >;
   prompt_template_hashes: Record<string, string>;
+  evaluation_contract_hashes: Record<string, string>;
   source_hashes: Record<string, string>;
   calls: ModelCallRecord[];
 }
@@ -48,6 +57,19 @@ function descriptor(client: ModelClient) {
       ? { endpoint_hash: client.endpoint_hash }
       : {}),
   };
+}
+
+async function evaluationContractHashes(
+  repoRoot: string
+): Promise<Record<string, string>> {
+  return Object.fromEntries(
+    await Promise.all(
+      Object.entries(EVALUATION_CONTRACT_FILES).map(async ([key, file]) => [
+        key,
+        stableHash(await readFile(path.join(repoRoot, file), 'utf8')),
+      ])
+    )
+  );
 }
 
 async function sourceHashes(
@@ -103,6 +125,7 @@ export async function buildRealEvalManifest(input: {
         await readFile(path.join(repoRoot, 'MODE-FICTION.md'), 'utf8')
       ),
     },
+    evaluation_contract_hashes: await evaluationContractHashes(repoRoot),
     source_hashes: await sourceHashes(repoRoot),
     calls: input.calls.map((call) => structuredClone(call)),
   };
