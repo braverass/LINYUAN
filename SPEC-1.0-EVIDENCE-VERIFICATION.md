@@ -10,7 +10,7 @@ It deliberately does **not** claim cryptographic authenticity against an attacke
 
 A syntactically valid `commit_sha` is therefore not, by itself, proof that the bundle was produced by that repository commit. Offline verification preserves that compatibility boundary.
 
-When `fiction:verify` is invoked with `--repo-root <checkout>`, the verifier additionally binds the bundle to that checkout's current commit, `SOURCE_REGISTRY.yaml`, executable model prompt templates, and the default `MODE-FICTION.md` system contract. This strengthens repository provenance but still does not prove that an external provider served the recorded calls.
+When `fiction:verify` is invoked with `--repo-root <checkout>`, the verifier additionally binds the bundle to the actual checked-out Git commit (ignoring commit environment overrides), requires no tracked worktree changes, binds `SOURCE_REGISTRY.yaml`, re-resolves every recorded retrieval semantic ID and recomputes its Canon content hash, checks executable model prompt templates, and checks the default `MODE-FICTION.md` system contract when no custom system was used. This strengthens repository provenance but still does not prove that an external provider served the recorded calls.
 
 ## Single-use run directories
 
