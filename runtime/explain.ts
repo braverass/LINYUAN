@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { parseJsonObject } from './model/json';
+import { validateModelResponse } from './model/evidence';
 import { createModelClientFromEnv } from './model/providers';
 import type {
   ModelCallRecord,
@@ -72,6 +73,7 @@ async function invoke(
   calls: ModelCallRecord[]
 ): Promise<ModelResponse> {
   const response = await client.complete(request);
+  validateModelResponse(client, response);
   calls.push({
     stage: request.stage,
     provider: response.provider,
