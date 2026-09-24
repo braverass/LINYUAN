@@ -65,6 +65,8 @@ export interface LiveFictionManifest {
       provider: string;
       model: string;
       defaults: ModelDefaults;
+      endpoint_kind?: 'official' | 'custom';
+      endpoint_hash?: string;
     }
   >;
   retrieval: Array<{
@@ -189,12 +191,27 @@ function descriptor(client: ModelClient): {
   provider: string;
   model: string;
   defaults: ModelDefaults;
+  endpoint_kind?: 'official' | 'custom';
+  endpoint_hash?: string;
 } {
-  return {
+  const value: {
+    provider: string;
+    model: string;
+    defaults: ModelDefaults;
+    endpoint_kind?: 'official' | 'custom';
+    endpoint_hash?: string;
+  } = {
     provider: client.provider,
     model: client.model,
     defaults: structuredClone(client.defaults),
   };
+  if (client.endpoint_kind !== undefined) {
+    value.endpoint_kind = client.endpoint_kind;
+  }
+  if (client.endpoint_hash !== undefined) {
+    value.endpoint_hash = client.endpoint_hash;
+  }
+  return value;
 }
 
 function stageModels(
@@ -217,6 +234,20 @@ function promptTemplateHashes(): Record<string, string> {
       stableHash(value),
     ])
   );
+}
+
+async function executablePromptHashes(
+  repoRoot: string
+): Promise<Record<string, string>> {
+  return {
+    ...promptTemplateHashes(),
+    runtime_adapter_source: stableHash(
+      await readFile(
+        path.join(repoRoot, 'runtime/adapters/model-backed.ts'),
+        'utf8'
+      )
+    ),
+  };
 }
 
 function assertInput(input: ProductionFictionInput): void {
@@ -330,6 +361,7 @@ function buildManifest(input: {
   sourceInput: ProductionFictionInput;
   systemHash: string | null;
   registryHash: string | null;
+  promptHashes: Record<string, string>;
   clients: RuntimeModelClients | null;
   calls: ModelCallRecord[];
   result: FictionRunResult | null;
@@ -356,7 +388,7 @@ function buildManifest(input: {
     runtime_contract: {
       system_hash: input.systemHash,
       source_registry_hash: input.registryHash,
-      prompt_template_hashes: promptTemplateHashes(),
+      prompt_template_hashes: structuredClone(input.promptHashes),
     },
     stage_models: stageModels(input.clients),
     retrieval: input.result
@@ -395,6 +427,7 @@ export async function runLiveFictionBundle(
   let runtime: ModelBackedRuntime | null = null;
   let systemHash: string | null = null;
   let registryHash: string | null = null;
+  let promptHashes = promptTemplateHashes();
 
   try {
     assertInput(input);
@@ -406,6 +439,7 @@ export async function runLiveFictionBundle(
     registryHash = stableHash(
       await readFile(path.join(repoRoot, 'SOURCE_REGISTRY.yaml'), 'utf8')
     );
+    promptHashes = await executablePromptHashes(repoRoot);
 
     if (!clients) {
       clients = createProductionModelClientsFromEnv();
@@ -441,6 +475,7 @@ export async function runLiveFictionBundle(
       sourceInput: input,
       systemHash,
       registryHash,
+      promptHashes,
       clients,
       calls,
       result,
@@ -481,6 +516,7 @@ export async function runLiveFictionBundle(
       sourceInput: input,
       systemHash,
       registryHash,
+      promptHashes,
       clients,
       calls,
       result: null,
