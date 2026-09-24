@@ -4,7 +4,8 @@ import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 
 import { MODEL_PROMPT_TEMPLATES } from './adapters/model-backed';
-import { detectGitCommit } from './git';
+import { detectGitCommit, trackedGitWorktreeIsClean } from './git';
+import { loadRegistry, resolveRegisteredSourcePath } from './registry';
 import { stableHash } from './trace';
 
 export interface LiveBundleVerificationIssue {
@@ -408,7 +409,9 @@ async function verifyRepositoryBinding(
     return;
   }
 
-  const currentCommit = await detectGitCommit(repoRoot);
+  const currentCommit = await detectGitCommit(repoRoot, {
+    useEnvironment: false,
+  });
   if (!isCommitSha(currentCommit)) {
     addIssue(
       errors,
@@ -425,11 +428,26 @@ async function verifyRepositoryBinding(
     );
   }
 
-  try {
-    const registryText = await readFile(
-      path.join(repoRoot, 'SOURCE_REGISTRY.yaml'),
-      'utf8'
+  const clean = await trackedGitWorktreeIsClean(repoRoot);
+  if (clean === null) {
+    addIssue(
+      errors,
+      'REPO_WORKTREE_STATUS_UNAVAILABLE',
+      'Could not inspect tracked repository worktree state',
+      'manifest.json'
     );
+  } else if (!clean) {
+    addIssue(
+      errors,
+      'REPO_WORKTREE_DIRTY',
+      'Repository-bound verification requires no tracked working-tree changes',
+      'manifest.json'
+    );
+  }
+
+  try {
+    const registryPath = path.join(repoRoot, 'SOURCE_REGISTRY.yaml');
+    const registryText = await readFile(registryPath, 'utf8');
     if (runtimeContract.source_registry_hash !== stableHash(registryText)) {
       addIssue(
         errors,
@@ -438,11 +456,61 @@ async function verifyRepositoryBinding(
         'manifest.json'
       );
     }
+
+    const registry = await loadRegistry(registryPath);
+    if (!Array.isArray(manifest.retrieval)) {
+      addIssue(
+        errors,
+        'REPO_RETRIEVAL_BINDING_INVALID',
+        'manifest.retrieval must be an array for repository-bound verification',
+        'manifest.json'
+      );
+    } else {
+      for (const raw of manifest.retrieval) {
+        const item = asRecord(raw);
+        if (!item || !nonEmptyString(item.semantic_id) || !isSha256(item.content_hash)) {
+          continue;
+        }
+        const source = registry.sources[item.semantic_id];
+        if (!source) {
+          addIssue(
+            errors,
+            'REPO_RETRIEVAL_SOURCE_MISSING',
+            'Retrieved semantic ID is absent from SOURCE_REGISTRY.yaml: ' + item.semantic_id,
+            'manifest.json'
+          );
+          continue;
+        }
+        try {
+          const sourcePath = await resolveRegisteredSourcePath(repoRoot, source.path);
+          const content = await readFile(sourcePath, 'utf8');
+          if (item.content_hash !== stableHash(content)) {
+            addIssue(
+              errors,
+              'REPO_RETRIEVAL_HASH_MISMATCH',
+              'Retrieved Canon content hash does not match current repository source: ' +
+                item.semantic_id,
+              'manifest.json'
+            );
+          }
+        } catch (error) {
+          addIssue(
+            errors,
+            'REPO_RETRIEVAL_SOURCE_UNREADABLE',
+            'Cannot verify retrieved source ' +
+              item.semantic_id +
+              ': ' +
+              errorMessage(error),
+            'manifest.json'
+          );
+        }
+      }
+    }
   } catch (error) {
     addIssue(
       errors,
       'REPO_REGISTRY_UNREADABLE',
-      'Cannot read SOURCE_REGISTRY.yaml: ' + errorMessage(error),
+      'Cannot read or parse SOURCE_REGISTRY.yaml: ' + errorMessage(error),
       'manifest.json'
     );
   }
