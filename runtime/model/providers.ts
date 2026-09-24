@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import type {
   ModelClient,
   ModelDefaults,
@@ -26,6 +28,10 @@ function numberFromEnv(value: string | undefined): number | undefined {
 
 function cleanBaseUrl(value: string): string {
   return value.replace(/\/+$/, '');
+}
+
+function endpointHash(value: string): string {
+  return createHash('sha256').update(value).digest('hex');
 }
 
 function sanitizeProviderErrorDetail(
@@ -182,9 +188,12 @@ function openAIText(data: Record<string, unknown>): string {
 
 function createOpenAIClient(config: ProviderConfig): ModelClient {
   const defaults = config.defaults ?? {};
-  const baseUrl = cleanBaseUrl(config.baseUrl ?? 'https://api.openai.com/v1');
+  const officialBaseUrl = 'https://api.openai.com/v1';
+  const baseUrl = cleanBaseUrl(config.baseUrl ?? officialBaseUrl);
 
   return {
+    endpoint_kind: baseUrl === officialBaseUrl ? 'official' : 'custom',
+    endpoint_hash: endpointHash(baseUrl),
     provider: 'openai',
     model: config.model,
     defaults,
@@ -246,11 +255,14 @@ function createOpenAIClient(config: ProviderConfig): ModelClient {
 
 function createGeminiClient(config: ProviderConfig): ModelClient {
   const defaults = config.defaults ?? {};
+  const officialBaseUrl = 'https://generativelanguage.googleapis.com/v1beta';
   const baseUrl = cleanBaseUrl(
-    config.baseUrl ?? 'https://generativelanguage.googleapis.com/v1beta'
+    config.baseUrl ?? officialBaseUrl
   );
 
   return {
+    endpoint_kind: baseUrl === officialBaseUrl ? 'official' : 'custom',
+    endpoint_hash: endpointHash(baseUrl),
     provider: 'gemini',
     model: config.model,
     defaults,
@@ -342,9 +354,12 @@ function createGeminiClient(config: ProviderConfig): ModelClient {
 
 function createAnthropicClient(config: ProviderConfig): ModelClient {
   const defaults = config.defaults ?? {};
-  const baseUrl = cleanBaseUrl(config.baseUrl ?? 'https://api.anthropic.com');
+  const officialBaseUrl = 'https://api.anthropic.com';
+  const baseUrl = cleanBaseUrl(config.baseUrl ?? officialBaseUrl);
 
   return {
+    endpoint_kind: baseUrl === officialBaseUrl ? 'official' : 'custom',
+    endpoint_hash: endpointHash(baseUrl),
     provider: 'anthropic',
     model: config.model,
     defaults,
