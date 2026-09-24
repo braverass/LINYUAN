@@ -595,3 +595,37 @@ test('repository-bound recheck binds the default MODE-FICTION system', async () 
     await rm(runDir, { recursive: true, force: true });
   }
 });
+
+
+test('adversarial recheck: invalid numeric stage defaults cannot hide behind matching call settings', async () => {
+  const runDir = await mkdtemp(path.join(os.tmpdir(), 'linyuan-recheck-invalid-model-settings-'));
+  try {
+    await makeBundle(runDir);
+    const manifest = await readJson(path.join(runDir, 'manifest.json'));
+    const calls = await readJson(path.join(runDir, 'calls.json'));
+
+    manifest.stage_models.compiler.defaults.maxOutputTokens = -7;
+    const compilerCall = calls.find((call: any) => call.stage === 'compiler');
+    assert.ok(compilerCall);
+    compilerCall.settings.max_output_tokens = -7;
+    manifest.calls = JSON.parse(JSON.stringify(calls));
+
+    await writeTrackedJson(runDir, 'calls.json', calls, manifest);
+    await saveManifest(runDir, manifest);
+
+    const report = await verifyLiveFictionBundle(runDir);
+    assert.equal(report.ok, false);
+    assert.equal(
+      report.errors.some(
+        (issue) => issue.code === 'STAGE_MODEL_DEFAULTS_INVALID'
+      ),
+      true
+    );
+    assert.equal(
+      report.errors.some((issue) => issue.code === 'CALL_SETTINGS_INVALID'),
+      true
+    );
+  } finally {
+    await rm(runDir, { recursive: true, force: true });
+  }
+});
