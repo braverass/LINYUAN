@@ -158,9 +158,19 @@ function usageObject(
   totalTokens: unknown
 ): ModelUsage | undefined {
   const usage: ModelUsage = {};
-  if (typeof inputTokens === 'number') usage.inputTokens = inputTokens;
-  if (typeof outputTokens === 'number') usage.outputTokens = outputTokens;
-  if (typeof totalTokens === 'number') usage.totalTokens = totalTokens;
+  for (const [key, raw] of [
+    ['inputTokens', inputTokens],
+    ['outputTokens', outputTokens],
+    ['totalTokens', totalTokens],
+  ] as const) {
+    if (raw === undefined) continue;
+    if (!Number.isSafeInteger(raw) || (raw as number) < 0) {
+      throw new Error(
+        'Model API response contains invalid token usage for ' + key
+      );
+    }
+    usage[key] = raw as number;
+  }
   return Object.keys(usage).length === 0 ? undefined : usage;
 }
 
