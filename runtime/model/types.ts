@@ -54,6 +54,7 @@ export interface ModelCallRecord {
   stage: ModelStage;
   provider: ModelProvider;
   model: string;
+  requested_model?: string;
   request_hash: string;
   response_hash: string;
   response_format: 'text' | 'json';
