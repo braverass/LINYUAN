@@ -5,6 +5,14 @@ on:
     branches: [main]
     paths:
       - "runtime/**"
+      - "SOURCE_REGISTRY.yaml"
+      - "MODE-FICTION.md"
+      - "00*.md"
+      - "01-*.md"
+      - "02-*.md"
+      - "03-*.md"
+      - "04-*.md"
+      - "05-*.md"
       - "package.json"
       - "SPEC-0.9-LIVE-E2E.md"
       - "SPEC-1.0-EVIDENCE-VERIFICATION.md"
@@ -13,6 +21,14 @@ on:
   pull_request:
     paths:
       - "runtime/**"
+      - "SOURCE_REGISTRY.yaml"
+      - "MODE-FICTION.md"
+      - "00*.md"
+      - "01-*.md"
+      - "02-*.md"
+      - "03-*.md"
+      - "04-*.md"
+      - "05-*.md"
       - "package.json"
       - "SPEC-0.9-LIVE-E2E.md"
       - "SPEC-1.0-EVIDENCE-VERIFICATION.md"
