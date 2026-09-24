@@ -10,11 +10,15 @@ import {
 import { loadRegistry, resolveRegisteredSourcePath } from '../runtime/registry';
 import { stableHash } from '../runtime/trace';
 import { loadEvalCases } from './loader';
-import type { RealEvalManifest } from './run-manifest';
+import {
+  EVALUATION_CONTRACT_FILES,
+  type RealEvalManifest,
+} from './run-manifest';
 
 export interface BaselineProvenanceSnapshot {
   case_set_hash: string;
   prompt_template_hashes: Record<string, string>;
+  evaluation_contract_hashes: Record<string, string>;
   source_hashes: Record<string, string>;
 }
 
@@ -282,6 +286,19 @@ async function promptTemplateHashes(
   };
 }
 
+async function evaluationContractHashes(
+  repoRoot: string
+): Promise<Record<string, string>> {
+  return Object.fromEntries(
+    await Promise.all(
+      Object.entries(EVALUATION_CONTRACT_FILES).map(async ([key, file]) => [
+        key,
+        stableHash(await readFile(path.join(repoRoot, file), 'utf8')),
+      ])
+    )
+  );
+}
+
 async function registeredSourceHashes(
   repoRoot: string
 ): Promise<Record<string, string>> {
@@ -307,6 +324,7 @@ export async function buildCurrentBaselineProvenance(
   return {
     case_set_hash: stableHash(cases),
     prompt_template_hashes: await promptTemplateHashes(repoRoot),
+    evaluation_contract_hashes: await evaluationContractHashes(repoRoot),
     source_hashes: await registeredSourceHashes(repoRoot),
   };
 }
@@ -372,6 +390,11 @@ export function assertBaselineProvenance(
     'prompt_template_hashes',
     manifest.prompt_template_hashes,
     current.prompt_template_hashes
+  );
+  assertHashMap(
+    'evaluation_contract_hashes',
+    manifest.evaluation_contract_hashes,
+    current.evaluation_contract_hashes
   );
   assertHashMap(
     'source_hashes',
