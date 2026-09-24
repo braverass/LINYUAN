@@ -532,3 +532,66 @@ test('provider-returned snapshot model may differ from the configured alias', as
     await rm(runDir, { recursive: true, force: true });
   }
 });
+
+
+test('repository-bound recheck binds retrieved Canon content to registry sources', async () => {
+  const runDir = await mkdtemp(path.join(os.tmpdir(), 'linyuan-recheck-repo-retrieval-'));
+  try {
+    await makeBundle(runDir);
+    const manifest = await readJson(path.join(runDir, 'manifest.json'));
+    const trace = await readJson(path.join(runDir, 'trace.json'));
+    manifest.retrieval[0].content_hash = 'c'.repeat(64);
+    trace.retrieval[0].content_hash = 'c'.repeat(64);
+    await writeTrackedJson(runDir, 'trace.json', trace, manifest);
+    await saveManifest(runDir, manifest);
+
+    const offline = await verifyLiveFictionBundle(runDir);
+    assert.equal(offline.ok, true, JSON.stringify(offline.errors));
+
+    const bound = await verifyLiveFictionBundle(runDir, {
+      repoRoot: process.cwd(),
+    });
+    assert.equal(bound.ok, false);
+    assert.equal(
+      bound.errors.some((issue) => issue.code === 'REPO_RETRIEVAL_HASH_MISMATCH'),
+      true
+    );
+  } finally {
+    await rm(runDir, { recursive: true, force: true });
+  }
+});
+
+test('repository-bound recheck binds the default MODE-FICTION system', async () => {
+  const runDir = await mkdtemp(path.join(os.tmpdir(), 'linyuan-recheck-repo-system-'));
+  try {
+    await runLiveFictionBundle(
+      {
+        request: 'fixture request',
+        sceneState: {},
+        semanticIds: ['AUTHOR.PERSONALITY'],
+        maxContextRounds: 3,
+        repoRoot: process.cwd(),
+      },
+      { runDir, clients: clients() }
+    );
+
+    const manifest = await readJson(path.join(runDir, 'manifest.json'));
+    assert.equal(manifest.input.custom_system, false);
+    manifest.runtime_contract.system_hash = 'd'.repeat(64);
+    await saveManifest(runDir, manifest);
+
+    const offline = await verifyLiveFictionBundle(runDir);
+    assert.equal(offline.ok, true, JSON.stringify(offline.errors));
+
+    const bound = await verifyLiveFictionBundle(runDir, {
+      repoRoot: process.cwd(),
+    });
+    assert.equal(bound.ok, false);
+    assert.equal(
+      bound.errors.some((issue) => issue.code === 'REPO_SYSTEM_HASH_MISMATCH'),
+      true
+    );
+  } finally {
+    await rm(runDir, { recursive: true, force: true });
+  }
+});
