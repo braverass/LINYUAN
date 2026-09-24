@@ -3,7 +3,9 @@ import { readFile } from 'node:fs/promises';
 import { assertBaselinePair } from './baseline-integrity';
 import {
   assertBaselineProvenance,
+  assertBaselineStageModels,
   buildCurrentBaselineProvenance,
+  expectedBaselineStageModelsFromEnv,
 } from './baseline-provenance';
 import type { RealEvalManifest } from './run-manifest';
 import type { EvalSuiteReport } from './types';
@@ -32,6 +34,11 @@ assertBaselineProvenance(
   process.env.LINYUAN_BASELINE_COMMIT
 );
 
+const expectedStageModels = expectedBaselineStageModelsFromEnv();
+if (expectedStageModels) {
+  assertBaselineStageModels(manifest, expectedStageModels);
+}
+
 console.log(
   JSON.stringify(
     {
@@ -41,6 +48,7 @@ console.log(
       case_set_hash: manifest.case_set_hash,
       prompt_template_hashes_verified: true,
       source_hashes_verified: true,
+      stage_models_verified: expectedStageModels !== null,
     },
     null,
     2
