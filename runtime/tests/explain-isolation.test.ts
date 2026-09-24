@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import type { ExplainModelClients } from '../explain';
-import { runProductionExplain } from '../explain';
+import { publicExplainOutput, runProductionExplain } from '../explain';
 import type { RuntimeModelClients } from '../adapters/model-backed';
 import type { ModelClient, ModelRequest, ModelResponse } from '../model/types';
 import { runProductionFiction } from '../production-fiction';
@@ -196,5 +196,77 @@ test('EXPLAIN context is not reused as FICTION model history', async () => {
     JSON.stringify(observed.filter((request) => request.stage === 'generator'))
       .includes(sentinel),
     false
+  );
+});
+
+
+test('EXPLAIN public output strips semantic IDs and call metadata, including JSON-facing output', async () => {
+  const explainClient = client(() =>
+    JSON.stringify({ answer: '只给结论。' })
+  );
+  const run = await runProductionExplain(
+    {
+      request: '解释人物',
+      semanticIds: ['AUTHOR.PERSONALITY'],
+    },
+    {
+      retrievalPlanner: explainClient,
+      explainer: explainClient,
+    }
+  );
+
+  const output = publicExplainOutput(run);
+  const serialized = JSON.stringify(output);
+  assert.deepEqual(output, { answer: '只给结论。' });
+  assert.equal(serialized.includes('AUTHOR.PERSONALITY'), false);
+  assert.equal(serialized.includes('request_hash'), false);
+  assert.equal(serialized.includes('response_hash'), false);
+});
+
+test('EXPLAIN default output rejects selected physical source filenames', async () => {
+  const explainClient = client(() =>
+    JSON.stringify({
+      answer: '依据 00B-AUTHOR-CANON-零渊真实人格.md 可以得出结论。',
+    })
+  );
+
+  await assert.rejects(
+    () =>
+      runProductionExplain(
+        {
+          request: '解释人物',
+          semanticIds: ['AUTHOR.PERSONALITY'],
+        },
+        {
+          retrievalPlanner: explainClient,
+          explainer: explainClient,
+        }
+      ),
+    /internal source metadata/
+  );
+});
+
+test('EXPLAIN evidence mode may name a source but may not narrate hidden retrieval process', async () => {
+  const explainClient = client(() =>
+    JSON.stringify({
+      answer: '结论。',
+      evidence_summary: 'Retrieval Planner 先选择了 AUTHOR.PERSONALITY。',
+    })
+  );
+
+  await assert.rejects(
+    () =>
+      runProductionExplain(
+        {
+          request: '给出依据',
+          semanticIds: ['AUTHOR.PERSONALITY'],
+          includeEvidence: true,
+        },
+        {
+          retrievalPlanner: explainClient,
+          explainer: explainClient,
+        }
+      ),
+    /hidden retrieval\/process metadata/
   );
 });
