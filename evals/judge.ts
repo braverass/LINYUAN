@@ -89,6 +89,7 @@ export async function judgeCase(
     stage: 'eval_judge',
     provider: response.provider,
     model: response.model,
+    requested_model: client.model,
     request_hash: stableHash(request),
     response_hash: stableHash(response.text),
     response_format: 'json',
