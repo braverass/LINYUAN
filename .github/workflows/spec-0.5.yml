@@ -5,6 +5,12 @@ on:
     branches: [main]
     paths:
       - "SOURCE_REGISTRY.yaml"
+      - "00*.md"
+      - "01-*.md"
+      - "02-*.md"
+      - "03-*.md"
+      - "04-*.md"
+      - "05-*.md"
       - "AI_ENTRY.md"
       - "MODE-FICTION.md"
       - "MODE-EXPLAIN.md"
@@ -16,6 +22,12 @@ on:
   pull_request:
     paths:
       - "SOURCE_REGISTRY.yaml"
+      - "00*.md"
+      - "01-*.md"
+      - "02-*.md"
+      - "03-*.md"
+      - "04-*.md"
+      - "05-*.md"
       - "AI_ENTRY.md"
       - "MODE-FICTION.md"
       - "MODE-EXPLAIN.md"
