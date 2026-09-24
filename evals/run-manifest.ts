@@ -27,6 +27,8 @@ export interface RealEvalManifest {
       provider: string;
       model: string;
       defaults: ModelDefaults;
+      endpoint_kind?: 'official' | 'custom';
+      endpoint_hash?: string;
     }
   >;
   prompt_template_hashes: Record<string, string>;
@@ -39,6 +41,12 @@ function descriptor(client: ModelClient) {
     provider: client.provider,
     model: client.model,
     defaults: structuredClone(client.defaults),
+    ...(client.endpoint_kind !== undefined
+      ? { endpoint_kind: client.endpoint_kind }
+      : {}),
+    ...(client.endpoint_hash !== undefined
+      ? { endpoint_hash: client.endpoint_hash }
+      : {}),
   };
 }
 
