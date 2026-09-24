@@ -575,3 +575,45 @@ test('modelDescriptorFromEnv resolves model provenance without requiring an API 
     }
   }
 });
+
+
+test('provider HTTP adapters reject invalid token usage metadata', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response(
+      JSON.stringify({
+        id: 'resp_bad_usage',
+        model: 'fixture-model',
+        output_text: '{}',
+        usage: {
+          input_tokens: 1,
+          output_tokens: 1,
+          total_tokens: -1,
+        },
+      }),
+      {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
+
+  try {
+    const client = createModelClient({
+      provider: 'openai',
+      model: 'fixture-model',
+      apiKey: 'fixture-key',
+      baseUrl: 'https://example.invalid/v1',
+    });
+    await assert.rejects(
+      () =>
+        client.complete({
+          stage: 'compiler',
+          prompt: '{}',
+          responseFormat: 'json',
+        }),
+      /invalid token usage/
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
