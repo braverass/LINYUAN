@@ -17,6 +17,7 @@ import {
   type FictionRunResult,
 } from './orchestrator';
 import {
+  assertProductionFictionInput,
   createProductionModelClientsFromEnv,
   type ProductionFictionInput,
 } from './production-fiction';
@@ -250,18 +251,6 @@ async function executablePromptHashes(
   };
 }
 
-function assertInput(input: ProductionFictionInput): void {
-  if (input.request.trim().length === 0) {
-    throw new Error('Fiction request must not be empty');
-  }
-  if (
-    input.maxContextRounds !== undefined &&
-    (!Number.isSafeInteger(input.maxContextRounds) || input.maxContextRounds < 1)
-  ) {
-    throw new Error('maxContextRounds must be a positive integer');
-  }
-}
-
 function secretValues(): string[] {
   return Object.entries(process.env)
     .filter(
@@ -430,7 +419,7 @@ export async function runLiveFictionBundle(
   let promptHashes = promptTemplateHashes();
 
   try {
-    assertInput(input);
+    assertProductionFictionInput(input);
 
     const system =
       input.system ??
