@@ -4,6 +4,7 @@ import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 
 import { MODEL_PROMPT_TEMPLATES } from './adapters/model-backed';
+import { officialModelEndpointHash } from './model/providers';
 import { detectGitCommit, trackedGitWorktreeIsClean } from './git';
 import { loadRegistry, resolveRegisteredSourcePath } from './registry';
 import { stableHash } from './trace';
@@ -1239,6 +1240,32 @@ export async function verifyLiveFictionBundle(
               'Stage endpoint_hash must be a SHA-256 value',
               'manifest.json'
             );
+          } else if (LIVE_PROVIDERS.has(String(descriptor.provider))) {
+            const officialHash = officialModelEndpointHash(
+              descriptor.provider as 'openai' | 'gemini' | 'anthropic'
+            );
+            if (
+              descriptor.endpoint_kind === 'official' &&
+              descriptor.endpoint_hash !== officialHash
+            ) {
+              addIssue(
+                errors,
+                'STAGE_MODEL_ENDPOINT_INVALID',
+                'Official endpoint hash does not match the provider runtime contract',
+                'manifest.json'
+              );
+            }
+            if (
+              descriptor.endpoint_kind === 'custom' &&
+              descriptor.endpoint_hash === officialHash
+            ) {
+              addIssue(
+                errors,
+                'STAGE_MODEL_ENDPOINT_INVALID',
+                'Custom endpoint metadata resolves to the official provider endpoint',
+                'manifest.json'
+              );
+            }
           }
         }
       }
