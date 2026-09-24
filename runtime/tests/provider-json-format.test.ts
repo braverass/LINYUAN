@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createModelClient } from '../model/providers';
+import { createModelClient, modelDescriptorFromEnv } from '../model/providers';
 
 test('OpenAI Responses requests JSON mode for structured runtime stages', async () => {
   const originalFetch = globalThis.fetch;
@@ -535,4 +535,43 @@ test('provider clients record endpoint provenance without exposing the endpoint 
   assert.equal(official.endpoint_kind, 'official');
   assert.equal(official.endpoint_hash?.length, 64);
   assert.notEqual(custom.endpoint_hash, official.endpoint_hash);
+});
+
+
+test('modelDescriptorFromEnv resolves model provenance without requiring an API key', () => {
+  const prefix = 'LINYUAN_BASELINEFIXTURE_';
+  const previous = {
+    provider: process.env[prefix + 'PROVIDER'],
+    model: process.env[prefix + 'MODEL'],
+    temperature: process.env[prefix + 'TEMPERATURE'],
+    baseUrl: process.env[prefix + 'BASE_URL'],
+  };
+
+  process.env[prefix + 'PROVIDER'] = 'openai';
+  process.env[prefix + 'MODEL'] = 'fixture-alias';
+  process.env[prefix + 'TEMPERATURE'] = '0.25';
+  process.env[prefix + 'BASE_URL'] = 'https://proxy.example.invalid/v1';
+
+  try {
+    const descriptor = modelDescriptorFromEnv('baselinefixture');
+    assert.ok(descriptor);
+    assert.equal(descriptor.provider, 'openai');
+    assert.equal(descriptor.model, 'fixture-alias');
+    assert.equal(descriptor.defaults.temperature, 0.25);
+    assert.equal(descriptor.endpoint_kind, 'custom');
+    assert.equal(descriptor.endpoint_hash.length, 64);
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      const envKey =
+        key === 'provider'
+          ? prefix + 'PROVIDER'
+          : key === 'model'
+            ? prefix + 'MODEL'
+            : key === 'temperature'
+              ? prefix + 'TEMPERATURE'
+              : prefix + 'BASE_URL';
+      if (value === undefined) delete process.env[envKey];
+      else process.env[envKey] = value;
+    }
+  }
 });
