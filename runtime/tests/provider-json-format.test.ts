@@ -652,7 +652,8 @@ test('Anthropic implicit max_tokens default is recorded as an effective client d
       prompt: '{}',
       responseFormat: 'json',
     });
-    assert.equal(capturedBody?.max_tokens, 4096);
+    assert.ok(capturedBody);
+    assert.equal((capturedBody as Record<string, unknown>)['max_tokens'], 4096);
   } finally {
     globalThis.fetch = originalFetch;
   }
