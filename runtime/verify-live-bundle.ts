@@ -570,17 +570,39 @@ async function verifyRepositoryBinding(
   }
 
   const promptHashes = asRecord(runtimeContract.prompt_template_hashes);
-  const expectedPromptHashes = Object.fromEntries(
-    Object.entries(MODEL_PROMPT_TEMPLATES).map(([stage, template]) => [
-      stage,
-      stableHash(template),
-    ])
-  );
-  if (!promptHashes || !isDeepStrictEqual(promptHashes, expectedPromptHashes)) {
+  let expectedPromptHashes: Record<string, string> | null = null;
+  try {
+    expectedPromptHashes = {
+      ...Object.fromEntries(
+        Object.entries(MODEL_PROMPT_TEMPLATES).map(([stage, template]) => [
+          stage,
+          stableHash(template),
+        ])
+      ),
+      runtime_adapter_source: stableHash(
+        await readFile(
+          path.join(repoRoot, 'runtime/adapters/model-backed.ts'),
+          'utf8'
+        )
+      ),
+    };
+  } catch (error) {
+    addIssue(
+      errors,
+      'REPO_PROMPT_SOURCE_UNREADABLE',
+      'Cannot read executable prompt source: ' + errorMessage(error),
+      'manifest.json'
+    );
+  }
+  if (
+    !promptHashes ||
+    !expectedPromptHashes ||
+    !isDeepStrictEqual(promptHashes, expectedPromptHashes)
+  ) {
     addIssue(
       errors,
       'REPO_PROMPT_HASH_MISMATCH',
-      'runtime_contract.prompt_template_hashes does not match executable prompt templates',
+      'runtime_contract.prompt_template_hashes does not match executable prompt templates/source',
       'manifest.json'
     );
   }
@@ -932,6 +954,17 @@ export async function verifyLiveFictionBundle(
           );
         }
       }
+      if (
+        hasOwn(promptHashes, 'runtime_adapter_source') &&
+        !isSha256(promptHashes.runtime_adapter_source)
+      ) {
+        addIssue(
+          errors,
+          'RUNTIME_PROMPT_HASHES_INVALID',
+          'runtime_adapter_source must be a SHA-256 value when present',
+          'manifest.json'
+        );
+      }
     }
   }
 
@@ -1131,6 +1164,36 @@ export async function verifyLiveFictionBundle(
       }
       if (descriptor) {
         validateModelDefaults(descriptor.defaults, errors, stage);
+        const hasEndpointKind = hasOwn(descriptor, 'endpoint_kind');
+        const hasEndpointHash = hasOwn(descriptor, 'endpoint_hash');
+        if (hasEndpointKind !== hasEndpointHash) {
+          addIssue(
+            errors,
+            'STAGE_MODEL_ENDPOINT_INVALID',
+            'Stage endpoint_kind and endpoint_hash must be recorded together',
+            'manifest.json'
+          );
+        } else if (hasEndpointKind) {
+          if (
+            descriptor.endpoint_kind !== 'official' &&
+            descriptor.endpoint_kind !== 'custom'
+          ) {
+            addIssue(
+              errors,
+              'STAGE_MODEL_ENDPOINT_INVALID',
+              'Stage endpoint_kind must be official or custom',
+              'manifest.json'
+            );
+          }
+          if (!isSha256(descriptor.endpoint_hash)) {
+            addIssue(
+              errors,
+              'STAGE_MODEL_ENDPOINT_INVALID',
+              'Stage endpoint_hash must be a SHA-256 value',
+              'manifest.json'
+            );
+          }
+        }
       }
     }
 
