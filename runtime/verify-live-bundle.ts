@@ -168,7 +168,8 @@ function validateSettings(
     addIssue(errors, 'CALL_SETTINGS_INVALID', 'Call settings must be an object', 'manifest.json');
     return;
   }
-  for (const key of ['temperature', 'top_p', 'max_output_tokens', 'seed']) {
+
+  for (const key of ['temperature', 'top_p']) {
     if (!hasOwn(settings, key) || !validNullableNumber(settings[key])) {
       addIssue(
         errors,
@@ -177,6 +178,34 @@ function validateSettings(
         'manifest.json'
       );
     }
+  }
+
+  const maxOutputTokens = settings.max_output_tokens;
+  if (
+    !hasOwn(settings, 'max_output_tokens') ||
+    (maxOutputTokens !== null &&
+      (!Number.isSafeInteger(maxOutputTokens) ||
+        (maxOutputTokens as number) < 1))
+  ) {
+    addIssue(
+      errors,
+      'CALL_SETTINGS_INVALID',
+      'Call max_output_tokens must be null or a positive safe integer',
+      'manifest.json'
+    );
+  }
+
+  const seed = settings.seed;
+  if (
+    !hasOwn(settings, 'seed') ||
+    (seed !== null && !Number.isSafeInteger(seed))
+  ) {
+    addIssue(
+      errors,
+      'CALL_SETTINGS_INVALID',
+      'Call seed must be null or a safe integer',
+      'manifest.json'
+    );
   }
 }
 
@@ -196,7 +225,7 @@ function validateModelDefaults(
     return null;
   }
 
-  for (const key of ['temperature', 'topP', 'maxOutputTokens', 'seed']) {
+  for (const key of ['temperature', 'topP']) {
     if (
       hasOwn(defaults, key) &&
       (typeof defaults[key] !== 'number' || !Number.isFinite(defaults[key]))
@@ -208,6 +237,31 @@ function validateModelDefaults(
         'manifest.json'
       );
     }
+  }
+
+  if (
+    hasOwn(defaults, 'maxOutputTokens') &&
+    (!Number.isSafeInteger(defaults.maxOutputTokens) ||
+      (defaults.maxOutputTokens as number) < 1)
+  ) {
+    addIssue(
+      errors,
+      'STAGE_MODEL_DEFAULTS_INVALID',
+      'Stage model default maxOutputTokens must be a positive safe integer',
+      'manifest.json'
+    );
+  }
+
+  if (
+    hasOwn(defaults, 'seed') &&
+    !Number.isSafeInteger(defaults.seed)
+  ) {
+    addIssue(
+      errors,
+      'STAGE_MODEL_DEFAULTS_INVALID',
+      'Stage model default seed must be a safe integer',
+      'manifest.json'
+    );
   }
   return defaults;
 }
