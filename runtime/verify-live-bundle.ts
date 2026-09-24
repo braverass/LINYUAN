@@ -281,6 +281,52 @@ function positiveSafeInteger(value: unknown): boolean {
   return Number.isSafeInteger(value) && (value as number) >= 1;
 }
 
+function validateErrorCallPrefix(
+  stages: string[],
+  semanticIds: unknown,
+  errors: LiveBundleVerificationIssue[]
+): void {
+  if (stages.length === 0) return;
+
+  if (semanticIds === null && stages[0] !== 'retrieval_planner') {
+    addIssue(
+      errors,
+      'CALL_SEQUENCE_INVALID',
+      'Planner-driven ERROR evidence must begin with retrieval_planner when successful calls exist',
+      'manifest.json'
+    );
+  } else if (Array.isArray(semanticIds) && stages[0] !== 'compiler') {
+    addIssue(
+      errors,
+      'CALL_SEQUENCE_INVALID',
+      'Explicit semantic-id ERROR evidence must begin with compiler when successful calls exist',
+      'manifest.json'
+    );
+  }
+
+  const transitions: Record<string, Set<string>> = {
+    retrieval_planner: new Set(['compiler']),
+    compiler: new Set(['retrieval_planner', 'generator']),
+    generator: new Set(['retrieval_planner', 'validator']),
+    validator: new Set(['patcher']),
+    patcher: new Set(['patcher']),
+  };
+
+  for (let index = 0; index < stages.length - 1; index += 1) {
+    const current = stages[index] as string;
+    const next = stages[index + 1] as string;
+    const allowed = transitions[current];
+    if (!allowed || !allowed.has(next)) {
+      addIssue(
+        errors,
+        'CALL_SEQUENCE_INVALID',
+        'Illegal ERROR call-history transition: ' + current + ' -> ' + next,
+        'manifest.json'
+      );
+    }
+  }
+}
+
 function validateSuccessfulCallSequence(
   status: string,
   stages: string[],
@@ -1396,6 +1442,14 @@ export async function verifyLiveFictionBundle(
       }
     }
 
+    if (status === 'ERROR') {
+      validateErrorCallPrefix(
+        callStages,
+        manifestInput?.semantic_ids,
+        errors
+      );
+    }
+
     if (status && status !== 'ERROR') {
       validateSuccessfulCallSequence(
         status,
@@ -1429,13 +1483,28 @@ export async function verifyLiveFictionBundle(
   }
 
   if (status === 'ERROR') {
-    if (manifest.failure === null || asRecord(manifest.failure) === null) {
+    const failureRecord = asRecord(manifest.failure);
+    if (!failureRecord) {
       addIssue(
         errors,
         'FAILURE_MISSING',
         'ERROR manifest must contain structured failure metadata',
         'manifest.json'
       );
+    } else {
+      const keys = Object.keys(failureRecord).sort();
+      if (
+        !isDeepStrictEqual(keys, ['message', 'name']) ||
+        !nonEmptyString(failureRecord.name) ||
+        typeof failureRecord.message !== 'string'
+      ) {
+        addIssue(
+          errors,
+          'FAILURE_INVALID',
+          'ERROR failure metadata must contain exactly non-empty name and string message',
+          'manifest.json'
+        );
+      }
     }
     const failureValue = artifactMetadata.has('failure.json')
       ? await readJsonArtifact(runDir, 'failure.json', errors)
