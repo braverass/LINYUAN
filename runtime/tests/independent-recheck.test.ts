@@ -372,3 +372,70 @@ test('adversarial recheck: successful runtime contract hashes must be SHA-256 va
     await rm(runDir, { recursive: true, force: true });
   }
 });
+
+
+test('repository-bound recheck accepts a bundle produced from the current checkout', async () => {
+  const runDir = await mkdtemp(path.join(os.tmpdir(), 'linyuan-recheck-repo-bound-'));
+  try {
+    await makeBundle(runDir);
+    const report = await verifyLiveFictionBundle(runDir, {
+      repoRoot: process.cwd(),
+    });
+    assert.equal(report.ok, true, JSON.stringify(report.errors));
+  } finally {
+    await rm(runDir, { recursive: true, force: true });
+  }
+});
+
+test('repository-bound recheck rejects a syntactically valid but wrong commit SHA', async () => {
+  const runDir = await mkdtemp(path.join(os.tmpdir(), 'linyuan-recheck-repo-commit-'));
+  try {
+    await makeBundle(runDir);
+    const manifest = await readJson(path.join(runDir, 'manifest.json'));
+    manifest.commit_sha = 'f'.repeat(40);
+    await saveManifest(runDir, manifest);
+
+    const offline = await verifyLiveFictionBundle(runDir);
+    assert.equal(offline.ok, true, JSON.stringify(offline.errors));
+
+    const bound = await verifyLiveFictionBundle(runDir, {
+      repoRoot: process.cwd(),
+    });
+    assert.equal(bound.ok, false);
+    assert.equal(
+      bound.errors.some((issue) => issue.code === 'REPO_COMMIT_MISMATCH'),
+      true
+    );
+  } finally {
+    await rm(runDir, { recursive: true, force: true });
+  }
+});
+
+test('repository-bound recheck binds registry and executable prompt hashes', async () => {
+  const runDir = await mkdtemp(path.join(os.tmpdir(), 'linyuan-recheck-repo-contract-'));
+  try {
+    await makeBundle(runDir);
+    const manifest = await readJson(path.join(runDir, 'manifest.json'));
+    manifest.runtime_contract.source_registry_hash = 'a'.repeat(64);
+    manifest.runtime_contract.prompt_template_hashes.compiler = 'b'.repeat(64);
+    await saveManifest(runDir, manifest);
+
+    const offline = await verifyLiveFictionBundle(runDir);
+    assert.equal(offline.ok, true, JSON.stringify(offline.errors));
+
+    const bound = await verifyLiveFictionBundle(runDir, {
+      repoRoot: process.cwd(),
+    });
+    assert.equal(bound.ok, false);
+    assert.equal(
+      bound.errors.some((issue) => issue.code === 'REPO_REGISTRY_HASH_MISMATCH'),
+      true
+    );
+    assert.equal(
+      bound.errors.some((issue) => issue.code === 'REPO_PROMPT_HASH_MISMATCH'),
+      true
+    );
+  } finally {
+    await rm(runDir, { recursive: true, force: true });
+  }
+});
