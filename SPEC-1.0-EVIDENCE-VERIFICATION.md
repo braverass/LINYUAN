@@ -8,7 +8,9 @@ The verifier is designed to catch accidental corruption, stale files, partial co
 
 It deliberately does **not** claim cryptographic authenticity against an attacker who can rewrite both every artifact and the manifest. It also does not prove that an external model provider actually served a request. Provider contact is established by the real execution environment and preserved workflow/run provenance, not by pretending a SHA-256 digest is a witness.
 
-A syntactically valid `commit_sha` is therefore not, by itself, proof that the bundle was produced by that repository commit. That binding must come from external checkout/workflow provenance.
+A syntactically valid `commit_sha` is therefore not, by itself, proof that the bundle was produced by that repository commit. Offline verification preserves that compatibility boundary.
+
+When `fiction:verify` is invoked with `--repo-root <checkout>`, the verifier additionally binds the bundle to that checkout's current commit, `SOURCE_REGISTRY.yaml`, executable model prompt templates, and the default `MODE-FICTION.md` system contract. This strengthens repository provenance but still does not prove that an external provider served the recorded calls.
 
 ## Single-use run directories
 
@@ -42,7 +44,7 @@ The verifier checks:
 - Successful inputs use a valid scene object, semantic-ID shape, and positive `max_context_rounds`.
 - When a custom `system_override` is recorded for a successful run, its content is bound to `runtime_contract.system_hash`.
 - `calls.json` exactly matches `manifest.calls`.
-- Call hashes, latency, usage, settings, provider/model identity, and request/response identifiers have valid shapes.
+- Call hashes, latency, usage, settings, provider identity, configured/requested model identity, provider-returned model identity, and request/response identifiers have valid shapes.
 - Recorded call settings agree with the configured stage-model defaults used by the live runtime.
 - Non-error call records must follow the executable runtime state machine; `OUTPUT`, `NEED_CONTEXT`, and `CONFLICT` each have valid terminal stages and forbidden stage combinations.
 - Successful/non-error `trace.json` uses the supported trace version and validates retrieval hashes, compiler READY evidence, generator payload hashes/missing-context shape, validator summaries, and patch scopes.
@@ -60,7 +62,9 @@ Live call records distinguish two provider-native identifiers when available:
 - `request_id` is the HTTP/API request identifier returned by provider response headers, such as OpenAI `x-request-id` or Claude `request-id`.
 - `response_id` is the provider response object identifier from the JSON payload, such as an OpenAI response ID, Gemini `responseId`, or Claude message ID.
 
-The two identifiers are intentionally not conflated. Older 0.9 bundles without `response_id` remain valid when the rest of the preserved evidence satisfies the current verifier.
+The two identifiers are intentionally not conflated. Model identity is likewise split: `requested_model` records the configured model ID sent by the runtime, while `model` records the provider-returned model ID. This permits normal alias-to-snapshot resolution without losing the configured identity.
+
+Older 0.9 bundles without `response_id` or `requested_model` remain valid when the rest of the preserved evidence satisfies the current verifier.
 
 ## CI and live workflow
 
