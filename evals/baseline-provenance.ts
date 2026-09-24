@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { MODEL_PROMPT_TEMPLATES } from '../runtime/adapters/model-backed';
-import { loadRegistry } from '../runtime/registry';
+import { loadRegistry, resolveRegisteredSourcePath } from '../runtime/registry';
 import { stableHash } from '../runtime/trace';
 import { loadEvalCases } from './loader';
 import type { RealEvalManifest } from './run-manifest';
@@ -13,13 +13,26 @@ export interface BaselineProvenanceSnapshot {
   source_hashes: Record<string, string>;
 }
 
-function promptTemplateHashes(): Record<string, string> {
-  return Object.fromEntries(
-    Object.entries(MODEL_PROMPT_TEMPLATES).map(([key, value]) => [
-      key,
-      stableHash(value),
-    ])
-  );
+async function promptTemplateHashes(
+  repoRoot: string
+): Promise<Record<string, string>> {
+  return {
+    ...Object.fromEntries(
+      Object.entries(MODEL_PROMPT_TEMPLATES).map(([key, value]) => [
+        key,
+        stableHash(value),
+      ])
+    ),
+    runtime_adapter_source: stableHash(
+      await readFile(
+        path.join(repoRoot, 'runtime/adapters/model-backed.ts'),
+        'utf8'
+      )
+    ),
+    mode_fiction: stableHash(
+      await readFile(path.join(repoRoot, 'MODE-FICTION.md'), 'utf8')
+    ),
+  };
 }
 
 async function registeredSourceHashes(
@@ -30,7 +43,8 @@ async function registeredSourceHashes(
   );
   const hashes: Record<string, string> = {};
   for (const [semanticId, source] of Object.entries(registry.sources)) {
-    const content = await readFile(path.join(repoRoot, source.path), 'utf8');
+    const sourcePath = await resolveRegisteredSourcePath(repoRoot, source.path);
+    const content = await readFile(sourcePath, 'utf8');
     hashes[semanticId] = stableHash(content);
   }
   return hashes;
@@ -45,7 +59,7 @@ export async function buildCurrentBaselineProvenance(
   ]);
   return {
     case_set_hash: stableHash(cases),
-    prompt_template_hashes: promptTemplateHashes(),
+    prompt_template_hashes: await promptTemplateHashes(repoRoot),
     source_hashes: await registeredSourceHashes(repoRoot),
   };
 }
