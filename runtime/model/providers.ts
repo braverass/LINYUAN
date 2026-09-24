@@ -121,6 +121,32 @@ function usageObject(
   return Object.keys(usage).length === 0 ? undefined : usage;
 }
 
+function validateModelSettings(settings: ModelDefaults): void {
+  for (const [name, value] of [
+    ['temperature', settings.temperature],
+    ['topP', settings.topP],
+  ] as const) {
+    if (value !== undefined && !Number.isFinite(value)) {
+      throw new Error(name + ' must be a finite number');
+    }
+  }
+
+  if (
+    settings.maxOutputTokens !== undefined &&
+    (!Number.isSafeInteger(settings.maxOutputTokens) ||
+      settings.maxOutputTokens < 1)
+  ) {
+    throw new Error('maxOutputTokens must be a positive safe integer');
+  }
+
+  if (
+    settings.seed !== undefined &&
+    !Number.isSafeInteger(settings.seed)
+  ) {
+    throw new Error('seed must be a safe integer');
+  }
+}
+
 function mergedDefaults(
   defaults: ModelDefaults,
   request: ModelRequest
@@ -132,6 +158,7 @@ function mergedDefaults(
     merged.maxOutputTokens = request.maxOutputTokens;
   }
   if (request.seed !== undefined) merged.seed = request.seed;
+  validateModelSettings(merged);
   return merged;
 }
 
@@ -383,6 +410,7 @@ function createAnthropicClient(config: ProviderConfig): ModelClient {
 }
 
 export function createModelClient(config: ProviderConfig): ModelClient {
+  validateModelSettings(config.defaults ?? {});
   if (config.provider === 'openai') return createOpenAIClient(config);
   if (config.provider === 'gemini') return createGeminiClient(config);
   return createAnthropicClient(config);
