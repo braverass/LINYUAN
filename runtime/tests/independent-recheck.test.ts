@@ -298,3 +298,77 @@ test('documented authenticity limit: another syntactically valid commit SHA is n
     await rm(runDir, { recursive: true, force: true });
   }
 });
+
+
+test('adversarial recheck: OUTPUT cannot resume compilation after validation', async () => {
+  const runDir = await mkdtemp(path.join(os.tmpdir(), 'linyuan-recheck-post-validator-'));
+  try {
+    await makeBundle(runDir);
+    const manifest = await readJson(path.join(runDir, 'manifest.json'));
+    const calls = await readJson(path.join(runDir, 'calls.json'));
+    calls.push(structuredClone(calls[0]));
+    manifest.calls = JSON.parse(JSON.stringify(calls));
+    await writeTrackedJson(runDir, 'calls.json', calls, manifest);
+    await saveManifest(runDir, manifest);
+
+    const report = await verifyLiveFictionBundle(runDir);
+    assert.equal(report.ok, false);
+    assert.equal(
+      report.errors.some((issue) => issue.code === 'CALL_SEQUENCE_INVALID'),
+      true
+    );
+  } finally {
+    await rm(runDir, { recursive: true, force: true });
+  }
+});
+
+test('adversarial recheck: trace schema and patch causality cannot drift', async () => {
+  const runDir = await mkdtemp(path.join(os.tmpdir(), 'linyuan-recheck-trace-shape-'));
+  try {
+    await makeBundle(runDir);
+    const manifest = await readJson(path.join(runDir, 'manifest.json'));
+    const trace = await readJson(path.join(runDir, 'trace.json'));
+    trace.version = '0.4';
+    trace.validator.violations.push({
+      id: 'V-extra',
+      severity: 'hard',
+      evidence_refs: [],
+    });
+    await writeTrackedJson(runDir, 'trace.json', trace, manifest);
+    await saveManifest(runDir, manifest);
+
+    const report = await verifyLiveFictionBundle(runDir);
+    assert.equal(report.ok, false);
+    assert.equal(
+      report.errors.some((issue) => issue.code === 'TRACE_VERSION_INVALID'),
+      true
+    );
+    assert.equal(
+      report.errors.some(
+        (issue) => issue.code === 'TRACE_PATCHER_VIOLATION_COUNT_MISMATCH'
+      ),
+      true
+    );
+  } finally {
+    await rm(runDir, { recursive: true, force: true });
+  }
+});
+
+test('adversarial recheck: successful runtime contract hashes must be SHA-256 values', async () => {
+  const runDir = await mkdtemp(path.join(os.tmpdir(), 'linyuan-recheck-contract-hash-'));
+  try {
+    await makeBundle(runDir);
+    const manifest = await readJson(path.join(runDir, 'manifest.json'));
+    manifest.runtime_contract.source_registry_hash = 'not-a-hash';
+    await saveManifest(runDir, manifest);
+
+    const report = await verifyLiveFictionBundle(runDir);
+    assert.equal(report.ok, false);
+    assert.equal(
+      report.errors.some((issue) => issue.code === 'RUNTIME_REGISTRY_HASH_INVALID'),
+      true
+    );
+  } finally {
+    await rm(runDir, { recursive: true, force: true });
+  }
+});
