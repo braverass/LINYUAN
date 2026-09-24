@@ -286,6 +286,122 @@ async function errorBundle(runDir: string): Promise<void> {
   assert.equal(report.status, 'ERROR');
 }
 
+
+test('adversarial: ERROR failure metadata must keep its declared shape', async () => {
+  const runDir = await mkdtemp(path.join(os.tmpdir(), 'linyuan-adv-error-shape-'));
+  try {
+    await errorBundle(runDir);
+    const manifestPath = path.join(runDir, 'manifest.json');
+    const manifest = await readJson(manifestPath);
+    manifest.failure = {};
+    await writeTrackedJson(runDir, 'failure.json', {}, manifest);
+    await writeFile(manifestPath, JSON.stringify(manifest, null, 2) + '\n', 'utf8');
+
+    const report = await verifyLiveFictionBundle(runDir);
+    assert.equal(report.ok, false);
+    assert.equal(
+      report.errors.some((issue) => issue.code === 'FAILURE_INVALID'),
+      true
+    );
+  } finally {
+    await rm(runDir, { recursive: true, force: true });
+  }
+});
+
+test('adversarial: ERROR successful-call history must be a legal runtime prefix', async () => {
+  const runDir = await mkdtemp(path.join(os.tmpdir(), 'linyuan-adv-error-prefix-'));
+  const client: ModelClient = {
+    provider: 'openai',
+    model: 'fixture-model',
+    defaults: {},
+    async complete(request: ModelRequest): Promise<ModelResponse> {
+      if (request.stage === 'compiler') {
+        return {
+          provider: 'openai',
+          model: 'fixture-model',
+          latencyMs: 1,
+          text: JSON.stringify({
+            status: 'READY',
+            activeContext: {
+              version: '0.5',
+              facts: [],
+              constraints: [],
+              unknowns: [],
+              inference_barriers: [],
+              open_dimensions: {
+                action_selection: true,
+                dialogue_realization: true,
+                pacing: true,
+                nonverbal_behavior: true,
+                emotional_expression: true,
+              },
+            },
+            provenance: {},
+          }),
+        };
+      }
+      if (request.stage === 'generator') {
+        return {
+          provider: 'openai',
+          model: 'fixture-model',
+          latencyMs: 1,
+          text: JSON.stringify({ status: 'DRAFT', draft: 'fixture output' }),
+        };
+      }
+      if (request.stage === 'validator') {
+        throw new Error('validator failed after successful compiler/generator');
+      }
+      throw new Error('unexpected stage ' + request.stage);
+    },
+  };
+  const failingClients: RuntimeModelClients = {
+    retrievalPlanner: client,
+    compiler: client,
+    generator: client,
+    validator: client,
+    patcher: client,
+  };
+
+  try {
+    try {
+      await runLiveFictionBundle(
+        {
+          request: 'fixture request',
+          sceneState: {},
+          semanticIds: ['AUTHOR.PERSONALITY'],
+          system: 'fixture system',
+          repoRoot: process.cwd(),
+        },
+        { runDir, clients: failingClients }
+      );
+      assert.fail('expected live run to fail');
+    } catch {
+      // Preserve the generated ERROR bundle.
+    }
+
+    const manifestPath = path.join(runDir, 'manifest.json');
+    const manifest = await readJson(manifestPath);
+    const calls = await readJson(path.join(runDir, 'calls.json'));
+    assert.deepEqual(
+      calls.map((call: any) => call.stage),
+      ['compiler', 'generator']
+    );
+    calls.reverse();
+    manifest.calls = JSON.parse(JSON.stringify(calls));
+    await writeTrackedJson(runDir, 'calls.json', calls, manifest);
+    await writeFile(manifestPath, JSON.stringify(manifest, null, 2) + '\n', 'utf8');
+
+    const report = await verifyLiveFictionBundle(runDir);
+    assert.equal(report.ok, false);
+    assert.equal(
+      report.errors.some((issue) => issue.code === 'CALL_SEQUENCE_INVALID'),
+      true
+    );
+  } finally {
+    await rm(runDir, { recursive: true, force: true });
+  }
+});
+
 test('adversarial matrix: artifact content, byte count, and manifest hash tampering are rejected', async () => {
   for (const mode of ['content', 'bytes', 'hash'] as const) {
     const runDir = await mkdtemp(path.join(os.tmpdir(), 'linyuan-adv-artifact-'));
