@@ -629,3 +629,24 @@ test('adversarial recheck: invalid numeric stage defaults cannot hide behind mat
     await rm(runDir, { recursive: true, force: true });
   }
 });
+
+
+test('adversarial recheck: endpoint provenance fields must be paired and well-formed', async () => {
+  const runDir = await mkdtemp(path.join(os.tmpdir(), 'linyuan-recheck-endpoint-shape-'));
+  try {
+    await makeBundle(runDir);
+    const manifest = await readJson(path.join(runDir, 'manifest.json'));
+    manifest.stage_models.compiler.endpoint_kind = 'custom';
+    delete manifest.stage_models.compiler.endpoint_hash;
+    await saveManifest(runDir, manifest);
+
+    const report = await verifyLiveFictionBundle(runDir);
+    assert.equal(report.ok, false);
+    assert.equal(
+      report.errors.some((issue) => issue.code === 'STAGE_MODEL_ENDPOINT_INVALID'),
+      true
+    );
+  } finally {
+    await rm(runDir, { recursive: true, force: true });
+  }
+});
