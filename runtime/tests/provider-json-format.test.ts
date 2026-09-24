@@ -617,3 +617,59 @@ test('provider HTTP adapters reject invalid token usage metadata', async () => {
     globalThis.fetch = originalFetch;
   }
 });
+
+
+test('Anthropic implicit max_tokens default is recorded as an effective client default', async () => {
+  const originalFetch = globalThis.fetch;
+  let capturedBody: Record<string, unknown> | null = null;
+  globalThis.fetch = async (_input, init) => {
+    capturedBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    return new Response(
+      JSON.stringify({
+        id: 'msg_default_tokens',
+        model: 'claude-fixture',
+        content: [{ type: 'text', text: '{}' }],
+        usage: { input_tokens: 1, output_tokens: 1 },
+      }),
+      {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
+  };
+
+  try {
+    const client = createModelClient({
+      provider: 'anthropic',
+      model: 'claude-fixture',
+      apiKey: 'fixture-key',
+      baseUrl: 'https://anthropic.invalid',
+    });
+
+    assert.equal(client.defaults.maxOutputTokens, 4096);
+    await client.complete({
+      stage: 'compiler',
+      prompt: '{}',
+      responseFormat: 'json',
+    });
+    assert.equal(capturedBody?.max_tokens, 4096);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  const prefix = 'LINYUAN_ANTHROPICFIXTURE_';
+  const previousProvider = process.env[prefix + 'PROVIDER'];
+  const previousModel = process.env[prefix + 'MODEL'];
+  process.env[prefix + 'PROVIDER'] = 'anthropic';
+  process.env[prefix + 'MODEL'] = 'claude-fixture';
+  try {
+    const descriptor = modelDescriptorFromEnv('anthropicfixture');
+    assert.ok(descriptor);
+    assert.equal(descriptor.defaults.maxOutputTokens, 4096);
+  } finally {
+    if (previousProvider === undefined) delete process.env[prefix + 'PROVIDER'];
+    else process.env[prefix + 'PROVIDER'] = previousProvider;
+    if (previousModel === undefined) delete process.env[prefix + 'MODEL'];
+    else process.env[prefix + 'MODEL'] = previousModel;
+  }
+});
