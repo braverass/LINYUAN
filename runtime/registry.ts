@@ -1,4 +1,4 @@
-import { access, readFile } from 'node:fs/promises';
+import { readFile, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { parse } from 'yaml';
 
@@ -53,6 +53,43 @@ export function assertRoleAccess(
   return source;
 }
 
+function isWithinRoot(root: string, target: string): boolean {
+  const relative = path.relative(root, target);
+  return (
+    relative === '' ||
+    (!path.isAbsolute(relative) &&
+      relative !== '..' &&
+      !relative.startsWith('..' + path.sep))
+  );
+}
+
+export async function resolveRegisteredSourcePath(
+  repoRoot: string,
+  sourcePath: string
+): Promise<string> {
+  if (!sourcePath || path.isAbsolute(sourcePath)) {
+    throw new Error('registered source path must be a relative repository path');
+  }
+
+  const root = await realpath(repoRoot);
+  const lexicalTarget = path.resolve(root, sourcePath);
+  if (!isWithinRoot(root, lexicalTarget)) {
+    throw new Error('registered source path escapes repository root');
+  }
+
+  const resolvedTarget = await realpath(lexicalTarget);
+  if (!isWithinRoot(root, resolvedTarget)) {
+    throw new Error('registered source path resolves outside repository root');
+  }
+
+  const metadata = await stat(resolvedTarget);
+  if (!metadata.isFile()) {
+    throw new Error('registered source path must resolve to a regular file');
+  }
+
+  return resolvedTarget;
+}
+
 export async function lintRegistry(
   registry: SourceRegistry,
   repoRoot = process.cwd()
@@ -80,9 +117,10 @@ export async function lintRegistry(
     }
 
     try {
-      await access(path.resolve(repoRoot, source.path));
-    } catch {
-      errors.push(`${semanticId}: path does not exist: ${source.path}`);
+      await resolveRegisteredSourcePath(repoRoot, source.path);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      errors.push(`${semanticId}: invalid physical path ${source.path}: ${message}`);
     }
   }
 
