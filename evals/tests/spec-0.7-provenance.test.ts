@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  assertBaselineModelEvidence,
   assertBaselineProvenance,
   assertBaselineStageModels,
   type BaselineProvenanceSnapshot,
@@ -122,5 +123,72 @@ test('baseline model provenance rejects a changed model configuration', () => {
   assert.throws(
     () => assertBaselineStageModels(value, expected),
     /stage_models/
+  );
+});
+
+
+function modelEvidenceManifest(): RealEvalManifest {
+  const value = manifest();
+  const stages = [
+    'retrieval_planner',
+    'compiler',
+    'generator',
+    'validator',
+    'patcher',
+    'eval_judge',
+  ] as const;
+  value.stage_models = Object.fromEntries(
+    stages.map((stage) => [
+      stage,
+      {
+        provider: 'openai',
+        model: 'fixture-alias',
+        defaults: {},
+      },
+    ])
+  );
+  value.calls = [
+    {
+      stage: 'compiler',
+      provider: 'openai',
+      model: 'fixture-snapshot-2026-09-24',
+      requested_model: 'fixture-alias',
+      request_hash: 'a'.repeat(64),
+      response_hash: 'b'.repeat(64),
+      response_format: 'json',
+      latency_ms: 1,
+      request_id: null,
+      response_id: null,
+      usage: null,
+      settings: {
+        temperature: null,
+        top_p: null,
+        max_output_tokens: null,
+        seed: null,
+      },
+    },
+  ];
+  return value;
+}
+
+test('baseline model evidence accepts provider snapshot ids when requested model matches', () => {
+  assert.doesNotThrow(() =>
+    assertBaselineModelEvidence(modelEvidenceManifest())
+  );
+});
+
+test('baseline model evidence rejects requested-model or settings drift', () => {
+  const wrongModel = modelEvidenceManifest();
+  wrongModel.calls[0]!.requested_model = 'other-alias';
+  assert.throws(
+    () => assertBaselineModelEvidence(wrongModel),
+    /requested model differs/
+  );
+
+  const wrongSettings = modelEvidenceManifest();
+  wrongSettings.calls[0]!.settings.temperature = 0.9;
+  assert.throws(
+    () => assertBaselineModelEvidence(wrongSettings),
+    /call settings differ/
   );
 });
