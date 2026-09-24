@@ -43,7 +43,7 @@ function assertProductionInput(input: ProductionFictionInput): void {
   }
   if (
     input.maxContextRounds !== undefined &&
-    (!Number.isInteger(input.maxContextRounds) || input.maxContextRounds < 1)
+    (!Number.isSafeInteger(input.maxContextRounds) || input.maxContextRounds < 1)
   ) {
     throw new Error('maxContextRounds must be a positive integer');
   }
