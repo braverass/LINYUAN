@@ -3,6 +3,8 @@ import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 
+import { MODEL_PROMPT_TEMPLATES } from './adapters/model-backed';
+import { detectGitCommit } from './git';
 import { stableHash } from './trace';
 
 export interface LiveBundleVerificationIssue {
@@ -20,6 +22,10 @@ export interface LiveBundleVerificationReport {
   status: string | null;
   verified_artifacts: string[];
   errors: LiveBundleVerificationIssue[];
+}
+
+export interface VerifyLiveBundleOptions {
+  repoRoot?: string;
 }
 
 type JsonRecord = Record<string, unknown>;
@@ -384,8 +390,104 @@ function validateTraceScope(
   }
 }
 
+async function verifyRepositoryBinding(
+  repoRootInput: string,
+  manifest: JsonRecord,
+  runtimeContract: JsonRecord | null,
+  manifestInput: JsonRecord | null,
+  errors: LiveBundleVerificationIssue[]
+): Promise<void> {
+  const repoRoot = path.resolve(repoRootInput);
+  if (!runtimeContract || !manifestInput) {
+    addIssue(
+      errors,
+      'REPO_BINDING_UNAVAILABLE',
+      'Repository-bound verification requires runtime_contract and manifest.input',
+      'manifest.json'
+    );
+    return;
+  }
+
+  const currentCommit = await detectGitCommit(repoRoot);
+  if (!isCommitSha(currentCommit)) {
+    addIssue(
+      errors,
+      'REPO_COMMIT_UNAVAILABLE',
+      'Could not resolve the current repository commit',
+      'manifest.json'
+    );
+  } else if (manifest.commit_sha !== currentCommit) {
+    addIssue(
+      errors,
+      'REPO_COMMIT_MISMATCH',
+      'manifest.commit_sha does not match the current repository commit',
+      'manifest.json'
+    );
+  }
+
+  try {
+    const registryText = await readFile(
+      path.join(repoRoot, 'SOURCE_REGISTRY.yaml'),
+      'utf8'
+    );
+    if (runtimeContract.source_registry_hash !== stableHash(registryText)) {
+      addIssue(
+        errors,
+        'REPO_REGISTRY_HASH_MISMATCH',
+        'runtime_contract.source_registry_hash does not match SOURCE_REGISTRY.yaml',
+        'manifest.json'
+      );
+    }
+  } catch (error) {
+    addIssue(
+      errors,
+      'REPO_REGISTRY_UNREADABLE',
+      'Cannot read SOURCE_REGISTRY.yaml: ' + errorMessage(error),
+      'manifest.json'
+    );
+  }
+
+  const promptHashes = asRecord(runtimeContract.prompt_template_hashes);
+  const expectedPromptHashes = Object.fromEntries(
+    Object.entries(MODEL_PROMPT_TEMPLATES).map(([stage, template]) => [
+      stage,
+      stableHash(template),
+    ])
+  );
+  if (!promptHashes || !isDeepStrictEqual(promptHashes, expectedPromptHashes)) {
+    addIssue(
+      errors,
+      'REPO_PROMPT_HASH_MISMATCH',
+      'runtime_contract.prompt_template_hashes does not match executable prompt templates',
+      'manifest.json'
+    );
+  }
+
+  if (manifestInput.custom_system === false) {
+    try {
+      const system = await readFile(path.join(repoRoot, 'MODE-FICTION.md'), 'utf8');
+      if (runtimeContract.system_hash !== stableHash(system)) {
+        addIssue(
+          errors,
+          'REPO_SYSTEM_HASH_MISMATCH',
+          'runtime_contract.system_hash does not match MODE-FICTION.md',
+          'manifest.json'
+        );
+      }
+    } catch (error) {
+      addIssue(
+        errors,
+        'REPO_SYSTEM_UNREADABLE',
+        'Cannot read MODE-FICTION.md: ' + errorMessage(error),
+        'manifest.json'
+      );
+    }
+  }
+}
+
 export async function verifyLiveFictionBundle(
-  runDirInput: string
+  runDirInput: string,
+  options: VerifyLiveBundleOptions = {}
 ): Promise<LiveBundleVerificationReport> {
   const runDir = path.resolve(runDirInput);
   const errors: LiveBundleVerificationIssue[] = [];
@@ -833,6 +935,20 @@ export async function verifyLiveFictionBundle(
       'INPUT_STRUCTURE_INVALID',
       'input.json and manifest.input must both be JSON objects',
       'input.json'
+    );
+  }
+
+  if (
+    options.repoRoot &&
+    status &&
+    status !== 'ERROR'
+  ) {
+    await verifyRepositoryBinding(
+      options.repoRoot,
+      manifest,
+      runtimeContract,
+      manifestInput,
+      errors
     );
   }
 
