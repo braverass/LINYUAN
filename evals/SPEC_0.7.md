@@ -137,6 +137,7 @@ interpret the baseline. The verifier recomputes:
 
 - the loaded evaluation case-set hash;
 - every model prompt-template hash, including the executable runtime adapter source;
+- evaluator-contract source hashes for Judge, metrics, candidate boundary, real executor and patch-locality logic;
 - every registered Canon source hash.
 
 A manifest with `commit_sha: UNKNOWN` is rejected. An exact experiment commit
@@ -158,8 +159,8 @@ configuration is supplied, repository provenance is still verified and the
 result explicitly reports `stage_models_verified: false`.
 
 This distinction matters because a perfectly paired report and manifest can
-still be stale after cases, prompts, or Canon change. Two matching JSON files
-are not a time machine.
+still be stale after cases, prompts, Canon, Judge logic or metric code change.
+Two matching JSON files are not a time machine.
 
 ## Commands
 
