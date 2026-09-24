@@ -455,3 +455,58 @@ test('unsupported seed settings are rejected rather than recorded as if applied'
     globalThis.fetch = originalFetch;
   }
 });
+
+
+test('model settings reject invalid token limits and non-integer seeds before fetch', async () => {
+  assert.throws(
+    () =>
+      createModelClient({
+        provider: 'openai',
+        model: 'fixture',
+        apiKey: 'key',
+        defaults: { maxOutputTokens: 0 },
+      }),
+    /maxOutputTokens must be a positive safe integer/
+  );
+
+  assert.throws(
+    () =>
+      createModelClient({
+        provider: 'gemini',
+        model: 'fixture',
+        apiKey: 'key',
+        defaults: { seed: 1.5 },
+      }),
+    /seed must be a safe integer/
+  );
+
+  const originalFetch = globalThis.fetch;
+  let fetchCalls = 0;
+  globalThis.fetch = async () => {
+    fetchCalls += 1;
+    throw new Error('fetch should not be reached');
+  };
+
+  try {
+    const client = createModelClient({
+      provider: 'openai',
+      model: 'fixture',
+      apiKey: 'key',
+      baseUrl: 'https://example.invalid/v1',
+    });
+
+    await assert.rejects(
+      () =>
+        client.complete({
+          stage: 'compiler',
+          prompt: '{}',
+          responseFormat: 'json',
+          maxOutputTokens: -1,
+        }),
+      /maxOutputTokens must be a positive safe integer/
+    );
+    assert.equal(fetchCalls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
