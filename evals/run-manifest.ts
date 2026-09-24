@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { loadRegistry } from '../runtime/registry';
+import { loadRegistry, resolveRegisteredSourcePath } from '../runtime/registry';
 import { stableHash } from '../runtime/trace';
 import {
   MODEL_PROMPT_TEMPLATES,
@@ -63,7 +63,8 @@ async function sourceHashes(
   const registry = await loadRegistry(path.join(repoRoot, 'SOURCE_REGISTRY.yaml'));
   const hashes: Record<string, string> = {};
   for (const [semanticId, source] of Object.entries(registry.sources)) {
-    const content = await readFile(path.join(repoRoot, source.path), 'utf8');
+    const sourcePath = await resolveRegisteredSourcePath(repoRoot, source.path);
+    const content = await readFile(sourcePath, 'utf8');
     hashes[semanticId] = stableHash(content);
   }
   return hashes;
@@ -92,12 +93,23 @@ export async function buildRealEvalManifest(input: {
       patcher: descriptor(input.clients.patcher),
       eval_judge: descriptor(input.judgeClient),
     },
-    prompt_template_hashes: Object.fromEntries(
-      Object.entries(MODEL_PROMPT_TEMPLATES).map(([key, value]) => [
-        key,
-        stableHash(value),
-      ])
-    ),
+    prompt_template_hashes: {
+      ...Object.fromEntries(
+        Object.entries(MODEL_PROMPT_TEMPLATES).map(([key, value]) => [
+          key,
+          stableHash(value),
+        ])
+      ),
+      runtime_adapter_source: stableHash(
+        await readFile(
+          path.join(repoRoot, 'runtime/adapters/model-backed.ts'),
+          'utf8'
+        )
+      ),
+      mode_fiction: stableHash(
+        await readFile(path.join(repoRoot, 'MODE-FICTION.md'), 'utf8')
+      ),
+    },
     source_hashes: await sourceHashes(repoRoot),
     calls: input.calls.map((call) => structuredClone(call)),
   };
