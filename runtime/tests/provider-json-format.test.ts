@@ -513,7 +513,7 @@ test('model settings reject invalid token limits and non-integer seeds before fe
 
 
 test('provider clients record endpoint provenance without exposing the endpoint URL', () => {
-  const customUrl = 'https://proxy.example.invalid/v1?token=secret-value';
+  const customUrl = 'https://proxy.example.invalid/v1';
   const custom = createModelClient({
     provider: 'openai',
     model: 'fixture',
@@ -525,7 +525,6 @@ test('provider clients record endpoint provenance without exposing the endpoint 
   assert.equal(typeof custom.endpoint_hash, 'string');
   assert.equal(custom.endpoint_hash?.length, 64);
   assert.equal(custom.endpoint_hash?.includes('proxy.example.invalid'), false);
-  assert.equal(custom.endpoint_hash?.includes('secret-value'), false);
 
   const official = createModelClient({
     provider: 'openai',
@@ -672,5 +671,26 @@ test('Anthropic implicit max_tokens default is recorded as an effective client d
     else process.env[prefix + 'PROVIDER'] = previousProvider;
     if (previousModel === undefined) delete process.env[prefix + 'MODEL'];
     else process.env[prefix + 'MODEL'] = previousModel;
+  }
+});
+
+
+test('model base URLs reject embedded credentials, query data, fragments, and non-HTTP schemes', () => {
+  for (const baseUrl of [
+    'https://user:password@example.invalid/v1',
+    'https://example.invalid/v1?token=secret',
+    'https://example.invalid/v1#fragment',
+    'file:///tmp/model-api',
+  ]) {
+    assert.throws(
+      () =>
+        createModelClient({
+          provider: 'openai',
+          model: 'fixture',
+          apiKey: 'key',
+          baseUrl,
+        }),
+      /base URL/
+    );
   }
 });
