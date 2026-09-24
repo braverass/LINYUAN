@@ -174,6 +174,17 @@ function usageObject(
   return Object.keys(usage).length === 0 ? undefined : usage;
 }
 
+function effectiveProviderDefaults(
+  provider: ModelProvider,
+  configured: ModelDefaults
+): ModelDefaults {
+  const defaults: ModelDefaults = { ...configured };
+  if (provider === 'anthropic' && defaults.maxOutputTokens === undefined) {
+    defaults.maxOutputTokens = 4096;
+  }
+  return defaults;
+}
+
 function validateModelSettings(settings: ModelDefaults): void {
   for (const [name, value] of [
     ['temperature', settings.temperature],
@@ -234,7 +245,7 @@ function openAIText(data: Record<string, unknown>): string {
 }
 
 function createOpenAIClient(config: ProviderConfig): ModelClient {
-  const defaults = config.defaults ?? {};
+  const defaults = effectiveProviderDefaults('openai', config.defaults ?? {});
   const endpoint = resolveModelEndpoint('openai', config.baseUrl);
   const baseUrl = endpoint.baseUrl;
 
@@ -301,7 +312,7 @@ function createOpenAIClient(config: ProviderConfig): ModelClient {
 }
 
 function createGeminiClient(config: ProviderConfig): ModelClient {
-  const defaults = config.defaults ?? {};
+  const defaults = effectiveProviderDefaults('gemini', config.defaults ?? {});
   const endpoint = resolveModelEndpoint('gemini', config.baseUrl);
   const baseUrl = endpoint.baseUrl;
 
@@ -398,7 +409,7 @@ function createGeminiClient(config: ProviderConfig): ModelClient {
 }
 
 function createAnthropicClient(config: ProviderConfig): ModelClient {
-  const defaults = config.defaults ?? {};
+  const defaults = effectiveProviderDefaults('anthropic', config.defaults ?? {});
   const endpoint = resolveModelEndpoint('anthropic', config.baseUrl);
   const baseUrl = endpoint.baseUrl;
 
@@ -527,7 +538,8 @@ export function modelDescriptorFromEnv(
   if (topP !== undefined) defaults.topP = topP;
   if (maxOutputTokens !== undefined) defaults.maxOutputTokens = maxOutputTokens;
   if (seed !== undefined) defaults.seed = seed;
-  validateModelSettings(defaults);
+  const effectiveDefaults = effectiveProviderDefaults(providerRaw, defaults);
+  validateModelSettings(effectiveDefaults);
 
   const baseUrl =
     process.env[prefix + 'BASE_URL'] ?? process.env.LINYUAN_MODEL_BASE_URL;
@@ -536,7 +548,7 @@ export function modelDescriptorFromEnv(
   return {
     provider: providerRaw,
     model,
-    defaults,
+    defaults: effectiveDefaults,
     endpoint_kind: endpoint.endpoint_kind,
     endpoint_hash: endpoint.endpoint_hash,
   };
