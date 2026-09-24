@@ -1130,16 +1130,36 @@ export async function verifyLiveFictionBundle(
           'No stage model descriptor for call stage ' + call.stage,
           'manifest.json'
         );
-      } else if (
-        descriptor &&
-        (call.provider !== descriptor.provider || call.model !== descriptor.model)
-      ) {
+      } else if (descriptor && call.provider !== descriptor.provider) {
         addIssue(
           errors,
-          'CALL_STAGE_MODEL_MISMATCH',
-          'Call provider/model differs from the stage model descriptor',
+          'CALL_STAGE_PROVIDER_MISMATCH',
+          'Call provider differs from the stage model descriptor',
           'manifest.json'
         );
+      }
+
+      if (descriptor) {
+        if (hasOwn(call, 'requested_model')) {
+          if (
+            !nonEmptyString(call.requested_model) ||
+            call.requested_model !== descriptor.model
+          ) {
+            addIssue(
+              errors,
+              'CALL_REQUESTED_MODEL_MISMATCH',
+              'Call requested_model differs from the configured stage model',
+              'manifest.json'
+            );
+          }
+        } else if (call.model !== descriptor.model) {
+          addIssue(
+            errors,
+            'CALL_STAGE_MODEL_MISMATCH',
+            'Legacy call model differs from the configured stage model',
+            'manifest.json'
+          );
+        }
       }
 
       if (descriptor) {
