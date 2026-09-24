@@ -35,7 +35,25 @@ function numberFromEnv(value: string | undefined): number | undefined {
 }
 
 function cleanBaseUrl(value: string): string {
-  return value.replace(/\/+$/, '');
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error('Model base URL must be an absolute HTTP(S) URL');
+  }
+
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    throw new Error('Model base URL must use http or https');
+  }
+  if (parsed.username || parsed.password) {
+    throw new Error('Model base URL must not contain URL credentials');
+  }
+  if (parsed.search || parsed.hash) {
+    throw new Error('Model base URL must not contain query or fragment data');
+  }
+
+  const pathname = parsed.pathname.replace(/\/+$/, '');
+  return parsed.origin + (pathname === '/' ? '' : pathname);
 }
 
 function endpointHash(value: string): string {
