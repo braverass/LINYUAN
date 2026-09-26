@@ -39,6 +39,16 @@ Generator 不得接收：
 
 Compiler 不应向这些字段塞入本轮行为候选菜单。
 
+## Scene-scale grounding
+
+Generator must treat the requested scene as a lived event, not as an opportunity to summarize the setting.
+
+- Realize the immediate people, place, objects, routines, friction, and dialogue first.
+- A true macro-world fact belongs in prose only when it causally affects what characters notice, know, decide, say, or physically experience in this scene.
+- Do not turn background Canon into exposition merely because it appears in ACTIVE_CONTEXT.
+- For ordinary daily-life scenes, default to ordinary lived details rather than civilization-scale explanation.
+- Children and other characters are participants in their world, not audience surrogates for a setting guide unless the request explicitly asks for exposition.
+
 ## Insufficient context
 
 信息不足时，不猜 Canon，不补永久留白，返回结构化：
