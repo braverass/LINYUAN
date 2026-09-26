@@ -37,7 +37,7 @@ jobs:
         with:
           node-version: "22"
 
-      - run: npm install --ignore-scripts
+      - run: npm ci --ignore-scripts
 
       - name: Verify selected provider secret exists
         shell: bash
