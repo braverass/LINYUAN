@@ -8,6 +8,7 @@ on:
       - "runtime/**"
       - "SOURCE_REGISTRY.yaml"
       - "package.json"
+      - "package-lock.json"
       - "tsconfig.json"
       - ".github/workflows/spec-0.7.yml"
   pull_request:
@@ -16,6 +17,7 @@ on:
       - "runtime/**"
       - "SOURCE_REGISTRY.yaml"
       - "package.json"
+      - "package-lock.json"
       - "tsconfig.json"
       - ".github/workflows/spec-0.7.yml"
 
@@ -27,5 +29,5 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - run: npm install --ignore-scripts
+      - run: npm ci --ignore-scripts
       - run: npm run ci

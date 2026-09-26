@@ -11,6 +11,7 @@ on:
       - "00A-按需读取与写作执行协议.md"
       - "runtime/**"
       - "package.json"
+      - "package-lock.json"
       - "tsconfig.json"
       - ".github/workflows/spec-0.5.yml"
   pull_request:
@@ -22,6 +23,7 @@ on:
       - "00A-按需读取与写作执行协议.md"
       - "runtime/**"
       - "package.json"
+      - "package-lock.json"
       - "tsconfig.json"
 
 jobs:
@@ -32,5 +34,5 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - run: npm install --ignore-scripts
+      - run: npm ci --ignore-scripts
       - run: npm run ci

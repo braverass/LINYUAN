@@ -61,7 +61,7 @@ The Generator and Patcher are isolated by payload construction, not by instructi
 ## Commands
 
 ```bash
-npm install
+npm ci
 npm run typecheck
 npm test
 npm run lint:registry

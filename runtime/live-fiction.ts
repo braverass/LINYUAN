@@ -1,6 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { execFile } from 'node:child_process';
 import { mkdir, open, readFile, readdir, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { promisify } from 'node:util';
 
 import {
   createModelBackedRuntime,
@@ -19,6 +21,8 @@ import {
   type ProductionFictionInput,
 } from './production-fiction';
 import { stableHash } from './trace';
+
+const execFileAsync = promisify(execFile);
 
 export type LiveFictionStatus =
   | 'OUTPUT'
@@ -188,14 +192,42 @@ async function detectGitCommit(repoRoot: string): Promise<string> {
   if (process.env.LINYUAN_COMMIT) return process.env.LINYUAN_COMMIT;
 
   try {
-    const head = (await readFile(path.join(repoRoot, '.git/HEAD'), 'utf8')).trim();
-    if (!head.startsWith('ref: ')) return head;
-    const refPath = head.slice(5).trim();
-    return (
-      await readFile(path.join(repoRoot, '.git', refPath), 'utf8')
-    ).trim();
+    const gitEnv = { ...process.env };
+    for (const key of [
+      'GIT_DIR',
+      'GIT_WORK_TREE',
+      'GIT_COMMON_DIR',
+      'GIT_INDEX_FILE',
+      'GIT_OBJECT_DIRECTORY',
+      'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+      'GIT_IMPLICIT_WORK_TREE',
+      'GIT_GRAFT_FILE',
+      'GIT_NO_REPLACE_OBJECTS',
+      'GIT_REPLACE_REF_BASE',
+      'GIT_PREFIX',
+      'GIT_SHALLOW_FILE',
+      'GIT_NAMESPACE',
+      'GIT_CONFIG',
+      'GIT_CONFIG_PARAMETERS',
+      'GIT_CONFIG_COUNT',
+    ]) {
+      delete gitEnv[key];
+    }
+    const { stdout } = await execFileAsync(
+      'git',
+      ['-C', repoRoot, 'rev-parse', '--verify', 'HEAD'],
+      { timeout: 5000, env: gitEnv }
+    );
+    return stdout.trim() || 'UNKNOWN';
   } catch {
-    return 'UNKNOWN';
+    try {
+      const head = (await readFile(path.join(repoRoot, '.git/HEAD'), 'utf8')).trim();
+      if (!head.startsWith('ref: ')) return head;
+      const refPath = head.slice(5).trim();
+      return (await readFile(path.join(repoRoot, '.git', refPath), 'utf8')).trim();
+    } catch {
+      return 'UNKNOWN';
+    }
   }
 }
 
