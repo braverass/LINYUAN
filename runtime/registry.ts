@@ -14,6 +14,7 @@ export interface RegistrySource {
   path: string;
   authority: string;
   content_role: string;
+  routing_hint?: string;
   instruction_capability: boolean;
   access: Record<RuntimeRole, 'read' | 'deny'>;
 }
@@ -63,6 +64,10 @@ export async function lintRegistry(
     if (!source.path) {
       errors.push(`${semanticId}: missing physical path`);
       continue;
+    }
+
+    if (source.access?.retriever === 'read' && !source.routing_hint?.trim()) {
+      errors.push(`${semanticId}: retrievable source must define routing_hint`);
     }
 
     if (source.instruction_capability !== false) {
