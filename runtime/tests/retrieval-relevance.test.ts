@@ -40,7 +40,7 @@ test('retrieval planner receives scene-relevance routing hints and compiler filt
         /WORLD\.ALL is a fallback/
       );
 
-      const payload = JSON.parse(request.prompt) as {
+      const payload = JSON.parse(request.prompt ?? '') as {
         available_sources: Array<{
           semantic_id: string;
           routing_hint: string;
