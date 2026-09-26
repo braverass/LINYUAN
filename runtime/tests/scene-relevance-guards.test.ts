@@ -223,3 +223,25 @@ test('ordinary scene can omit true lore without validator demanding exposition',
   assert.equal(validator.request, '写一个孩子放学回家的日常场景');
   assert.equal(validator.scene_state.location, '学校');
 });
+
+test('compiler cannot silently continue when every claimed scene fact lacks support', async () => {
+  const client: ModelClient = {
+    provider: 'openai', model: 'fixture-model', defaults: {},
+    async complete(request) {
+      assert.equal(request.stage, 'compiler');
+      return { provider: 'openai', model: 'fixture-model', latencyMs: 1,
+        text: JSON.stringify({ status: 'READY', activeContext: {
+          version: '0.5',
+          facts: [{ id: 'F1', type: 'fact', proposition: '无证据的宏观断言' }],
+          constraints: [], unknowns: [], inference_barriers: [],
+          open_dimensions: { action_selection: true, dialogue_realization: true,
+            pacing: true, nonverbal_behavior: true, emotional_expression: true },
+        }, provenance: {} }) };
+    },
+  };
+  const runtime = await createModelBackedRuntime(clients(client));
+  await assert.rejects(runtime.adapters.compile({
+    request: '写放学回家的日常', sceneState: {},
+    canonFragments: [{ semanticId: 'WORLD.CULTURE.DAILY', content: '普通家庭放学接送' }],
+  }), /no supported scene facts/);
+});

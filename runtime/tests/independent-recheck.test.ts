@@ -39,7 +39,7 @@ function client(): ModelClient {
                 emotional_expression: true,
               },
             },
-            provenance: { F1: { source_id: 'AUTHOR.PERSONALITY' } },
+            provenance: { F1: { source_id: 'AUTHOR.PERSONALITY', scene_relevance: 'material', scene_impact: 'Fixture fact applies to the requested scene.' } },
           }),
         };
       }

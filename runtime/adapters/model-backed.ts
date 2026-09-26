@@ -226,11 +226,15 @@ function retainSceneMaterial(
   if (output.status !== 'READY' || !output.activeContext) return output;
   const context = structuredClone(output.activeContext);
   const provenance = structuredClone(output.provenance ?? {});
+  const claimCount = context.facts.length + context.constraints.length;
+  const rejectedBefore = rejections.length;
   const material = <T extends { id: string }>(items: T[]): T[] => items.filter((item) => {
     const record = provenance[item.id];
     let reason: string | null = null;
     if (!record || !retrievedIds.has(record.source_id)) {
       reason = 'missing or unretrieved provenance';
+    } else if (record.scene_relevance === 'background') {
+      reason = 'explicitly background';
     } else if (record.scene_relevance !== 'material' || !record.scene_impact?.trim()) {
       reason = 'no material scene impact';
     }
@@ -239,6 +243,10 @@ function retainSceneMaterial(
   });
   context.facts = material(context.facts);
   context.constraints = material(context.constraints);
+  if (claimCount > 0 && context.facts.length + context.constraints.length === 0 &&
+    rejections.slice(rejectedBefore).some((item) => item.reason !== 'explicitly background')) {
+    throw new Error('Compiler returned no supported scene facts or constraints');
+  }
   const retainedIds = new Set([
     ...context.facts, ...context.constraints,
     ...context.unknowns, ...context.inference_barriers,
