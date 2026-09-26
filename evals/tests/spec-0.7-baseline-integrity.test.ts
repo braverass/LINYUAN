@@ -11,6 +11,7 @@ const report: EvalSuiteReport = {
   cases: 0,
   metrics: {
     retrieval_recall: 1,
+    retrieval_precision: 1,
     constraint_fidelity: 1,
     forbidden_inference_rate: 0,
     ir_overconstraint_rate: 0,

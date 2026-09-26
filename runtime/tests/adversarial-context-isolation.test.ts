@@ -40,7 +40,7 @@ test('adversarial isolation: Generator cannot see raw Canon and Patcher cannot s
                 emotional_expression: true,
               },
             },
-            provenance: { F1: { source_id: 'TEST.RAW' } },
+            provenance: { F1: { source_id: 'TEST.RAW', scene_relevance: 'material', scene_impact: 'This fixture claim governs the scene.' } },
           }),
         };
       }
@@ -63,7 +63,7 @@ test('adversarial isolation: Generator cannot see raw Canon and Patcher cannot s
                 id: 'V1',
                 severity: 'hard',
                 location: { paragraph: 1, sentence_start: 1, sentence_end: 1 },
-                actual: { semantic_claim: 'wrong' },
+                actual: { semantic_claim: 'wrong', draft_quote: '错误句。' },
                 required_state: { rule: 'compiled semantic correction' },
                 patch_contract: {
                   allowed_scope: { paragraph: 1, sentences: [1, 1] },

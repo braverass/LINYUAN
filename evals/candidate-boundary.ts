@@ -17,6 +17,7 @@ export interface EvalGold {
   category: EvalCategory;
   description: string;
   required_sources: string[];
+  allowed_sources?: string[];
   requirements: EvalRequirement[];
   forbidden_inferences: EvalForbiddenItem[];
   forbidden_overconstraints: EvalForbiddenItem[];
@@ -37,6 +38,7 @@ const FORBIDDEN_CANDIDATE_KEYS = new Set([
   'category',
   'description',
   'required_sources',
+  'allowed_sources',
   'requirements',
   'forbidden_inferences',
   'forbidden_overconstraints',
@@ -89,6 +91,7 @@ export function splitEvalCase(testCase: EvalCase): {
       category: testCase.category,
       description: testCase.description,
       required_sources: [...testCase.required_sources],
+      ...(testCase.allowed_sources ? { allowed_sources: [...testCase.allowed_sources] } : {}),
       requirements: structuredClone(testCase.requirements),
       forbidden_inferences: structuredClone(testCase.forbidden_inferences),
       forbidden_overconstraints: structuredClone(

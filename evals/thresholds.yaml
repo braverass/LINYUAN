@@ -2,6 +2,7 @@
 # These are contract targets, not claims about current model quality.
 minimum:
   retrieval_recall: 0.98
+  retrieval_precision: 0.90
   constraint_fidelity: 0.95
   need_context_precision: 0.90
   need_context_recall: 0.95

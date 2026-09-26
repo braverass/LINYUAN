@@ -78,6 +78,8 @@ export interface MissingContext {
 
 export interface ProvenanceRecord {
   source_id: string;
+  scene_relevance?: 'material' | 'background';
+  scene_impact?: string;
   evidence?: Array<{
     section?: string;
     locator?: string;
@@ -110,6 +112,7 @@ export interface Violation {
   location: ViolationLocation;
   actual: {
     semantic_claim: string;
+    draft_quote?: string;
   };
   required_state: Record<string, unknown>;
   patch_contract: PatchContract;

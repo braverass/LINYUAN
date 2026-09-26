@@ -58,6 +58,7 @@ test('metrics compute micro rates and penalize incomplete behavior sampling', ()
   const report = evaluateSuite([testCase], [observation]);
 
   assert.equal(report.metrics.retrieval_recall, 0.5);
+  assert.equal(report.metrics.retrieval_precision, 1);
   assert.equal(report.metrics.constraint_fidelity, 0.5);
   assert.equal(report.metrics.forbidden_inference_rate, 1);
   assert.equal(report.metrics.ir_overconstraint_rate, 0);
@@ -67,6 +68,26 @@ test('metrics compute micro rates and penalize incomplete behavior sampling', ()
   assert.equal(report.metrics.validator_false_positive_rate, 0.5);
   assert.equal(report.metrics.validator_false_negative_rate, 0.5);
   assert.equal(report.metrics.patch_locality, 0.5);
+});
+
+test('retrieval relevance penalizes extra macro sources even with perfect recall', () => {
+  const report = evaluateSuite([testCase], [{
+    ...observation,
+    retrieved_sources: ['A', 'B', 'WORLD.ALL'],
+  }]);
+  assert.equal(report.metrics.retrieval_recall, 1);
+  assert.equal(report.metrics.retrieval_precision, 2 / 3);
+  assert.throws(() => assertThresholds(report, {
+    minimum: { retrieval_precision: 0.9 }, maximum: {},
+  }), /retrieval_precision/);
+});
+
+test('retrieval precision accepts explicitly allowed focused supporting sources', () => {
+  const report = evaluateSuite([{ ...testCase, allowed_sources: ['C'] }], [{
+    ...observation,
+    retrieved_sources: ['A', 'B', 'C'],
+  }]);
+  assert.equal(report.metrics.retrieval_precision, 1);
 });
 
 test('threshold enforcement rejects bad reports', () => {

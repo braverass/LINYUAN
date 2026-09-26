@@ -31,6 +31,7 @@ properties:
       - knowledge
       - ability
       - continuity
+      - daily_life
       - adversarial
   description:
     type: string
@@ -39,6 +40,11 @@ properties:
   scene_state:
     type: object
   required_sources:
+    type: array
+    uniqueItems: true
+    items: { type: string }
+  allowed_sources:
+    description: "Focused optional sources that may supplement required_sources; all other retrievals lower precision."
     type: array
     uniqueItems: true
     items: { type: string }

@@ -4,6 +4,7 @@ export type EvalCategory =
   | 'knowledge'
   | 'ability'
   | 'continuity'
+  | 'daily_life'
   | 'adversarial';
 
 export interface EvalRequirement {
@@ -25,6 +26,7 @@ export interface EvalCase {
   request: string;
   scene_state: Record<string, unknown>;
   required_sources: string[];
+  allowed_sources?: string[];
   requirements: EvalRequirement[];
   forbidden_inferences: EvalForbiddenItem[];
   forbidden_overconstraints: EvalForbiddenItem[];
@@ -58,6 +60,7 @@ export interface EvalObservation {
 
 export interface EvalMetricReport {
   retrieval_recall: number;
+  retrieval_precision: number;
   constraint_fidelity: number;
   forbidden_inference_rate: number;
   ir_overconstraint_rate: number;

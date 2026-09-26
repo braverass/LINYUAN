@@ -36,6 +36,10 @@ properties:
           required: [semantic_claim]
           properties:
             semantic_claim: { type: string, minLength: 1 }
+            draft_quote:
+              description: "Exact nonempty draft span required for model-backed local patching."
+              type: string
+              minLength: 1
         required_state:
           type: object
         patch_contract:

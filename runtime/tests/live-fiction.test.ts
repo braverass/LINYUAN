@@ -60,7 +60,7 @@ function compilerReady(): string {
       },
     },
     provenance: {
-      F1: { source_id: 'AUTHOR.PERSONALITY' },
+      F1: { source_id: 'AUTHOR.PERSONALITY', scene_relevance: 'material', scene_impact: 'The fixture scene uses this fact.' },
     },
   });
 }

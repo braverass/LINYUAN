@@ -14,6 +14,7 @@ properties:
     additionalProperties: false
     required:
       - retrieval_recall
+      - retrieval_precision
       - constraint_fidelity
       - forbidden_inference_rate
       - ir_overconstraint_rate
@@ -26,6 +27,7 @@ properties:
       - metamorphic_invariance_rate
     properties:
       retrieval_recall: { type: number, minimum: 0, maximum: 1 }
+      retrieval_precision: { type: number, minimum: 0, maximum: 1 }
       constraint_fidelity: { type: number, minimum: 0, maximum: 1 }
       forbidden_inference_rate: { type: number, minimum: 0, maximum: 1 }
       ir_overconstraint_rate: { type: number, minimum: 0, maximum: 1 }

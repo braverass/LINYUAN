@@ -37,13 +37,14 @@ test('retrieval planner receives scene-relevance routing hints and compiler filt
       );
       assert.match(
         request.system ?? '',
-        /WORLD\.ALL is a fallback/
+        /WORLD\.ALL requires explicit caller selection/
       );
 
       const payload = JSON.parse(request.prompt ?? '') as {
         available_sources: Array<{
           semantic_id: string;
           routing_hint: string;
+          subsection_headings: string[];
         }>;
       };
       const inventory = new Map(
@@ -54,12 +55,16 @@ test('retrieval planner receives scene-relevance routing hints and compiler filt
       );
 
       assert.match(
-        inventory.get('WORLD.CULTURE') ?? '',
-        /Everyday lived life: housing, commuting, neighborhoods/
+        inventory.get('WORLD.CULTURE.DAILY') ?? '',
+        /Focused ordinary housing, commuting, neighborhoods/
+      );
+      assert.deepEqual(
+        payload.available_sources.find((source) => source.semantic_id === 'WORLD.CULTURE.DAILY')?.subsection_headings,
+        ['第一部分：住房·通勤·邻里·家务——日常的主干']
       );
       assert.match(
-        inventory.get('WORLD.PEOPLE') ?? '',
-        /First-choice source for child\/family\/generation scenes/
+        inventory.get('WORLD.PEOPLE.CHILDHOOD') ?? '',
+        /Children as distinct people and ordinary family care/
       );
       assert.match(
         inventory.get('WORLD.ALL') ?? '',
@@ -67,7 +72,7 @@ test('retrieval planner receives scene-relevance routing hints and compiler filt
       );
 
       return JSON.stringify({
-        semantic_ids: ['WORLD.CULTURE', 'WORLD.PEOPLE'],
+        semantic_ids: ['WORLD.CULTURE.DAILY', 'WORLD.PEOPLE.CHILDHOOD'],
       });
     }
 
@@ -112,7 +117,7 @@ test('retrieval planner receives scene-relevance routing hints and compiler filt
     { location: 'kindergarten', present_characters: ['child', 'parent'] }
   );
 
-  assert.deepEqual(ids, ['WORLD.CULTURE', 'WORLD.PEOPLE']);
+  assert.deepEqual(ids, ['WORLD.CULTURE.DAILY', 'WORLD.PEOPLE.CHILDHOOD']);
 
   await runtime.adapters.compile({
     request: '写一个 Alpha 世界幼儿园孩子放学回家的普通日常场景',
