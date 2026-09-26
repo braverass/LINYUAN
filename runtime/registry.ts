@@ -14,6 +14,7 @@ export interface RegistrySource {
   path: string;
   authority: string;
   content_role: string;
+  routing_hint?: string;
   instruction_capability: boolean;
   access: Record<RuntimeRole, 'read' | 'deny'>;
 }
