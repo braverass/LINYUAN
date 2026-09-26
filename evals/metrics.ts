@@ -27,6 +27,8 @@ export function evaluateSuite(
 
   let retrievalHit = 0;
   let retrievalExpected = 0;
+  let retrievalRelevant = 0;
+  let retrievalSelected = 0;
   let requirementHit = 0;
   let requirementExpected = 0;
   let forbiddenTriggered = 0;
@@ -67,6 +69,12 @@ export function evaluateSuite(
         testCase.required_sources
       );
       retrievalExpected += new Set(testCase.required_sources).size;
+      const allowed = new Set([
+        ...testCase.required_sources, ...(testCase.allowed_sources ?? []),
+      ]);
+      const selected = [...new Set(observation.retrieved_sources)];
+      retrievalSelected += selected.length;
+      retrievalRelevant += selected.filter((id) => allowed.has(id)).length;
     }
 
     const expectedRequirementIds = testCase.requirements.map((item) => item.id);
@@ -182,6 +190,7 @@ export function evaluateSuite(
 
   const metrics: EvalMetricReport = {
     retrieval_recall: ratio(retrievalHit, retrievalExpected, 1),
+    retrieval_precision: ratio(retrievalRelevant, retrievalSelected, 1),
     constraint_fidelity: ratio(requirementHit, requirementExpected, 1),
     forbidden_inference_rate: ratio(
       forbiddenTriggered,

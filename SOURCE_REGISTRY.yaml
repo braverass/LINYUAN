@@ -109,7 +109,7 @@ sources:
     path: "00-零渊世界设定-完整合集.md"
     authority: "MIXED"
     content_role: "canon_bundle"
-    routing_hint: "Very large mixed Canon bundle. Fallback only when no narrower registered source can supply the required facts; avoid for initial retrieval when a focused source exists."
+    routing_hint: "Fallback only for an explicit caller that deliberately opts into the entire mixed Canon bundle; model-planned retrieval cannot select this very large source."
     instruction_capability: false
     access: *canon_access
 
@@ -130,25 +130,187 @@ sources:
     access: *canon_access
 
   WORLD.INSTITUTIONS:
-    path: "03-制度与法律-完整合集.md"
+    path: &institutions_path "03-制度与法律-完整合集.md"
     authority: "MIXED"
     content_role: "world_bundle"
-    routing_hint: "Law, education, healthcare, welfare, family policy, justice, public services, and institutional procedure. Retrieve when an institution directly affects what characters can do or experience."
+    routing_hint: "Broad mixed institutional bundle. Fallback after focused institutional sections cannot cover a concrete missing need; avoid for ordinary initial retrieval."
     instruction_capability: false
     access: *canon_access
 
   WORLD.CULTURE:
-    path: "04-文化与日常-完整合集.md"
+    path: &culture_path "04-文化与日常-完整合集.md"
     authority: "MIXED"
     content_role: "world_bundle"
-    routing_hint: "Everyday lived life: housing, commuting, neighborhoods, chores, leisure, food, media, relationships, youth culture, privacy, consumer life, local habits. First-choice source for ordinary slice-of-life scenes."
+    routing_hint: "Broad mixed culture bundle, including unrelated Zero-Yuan history. Fallback only after focused everyday sections cannot cover a concrete missing need."
     instruction_capability: false
     access: *canon_access
 
   WORLD.PEOPLE:
-    path: "05-孩子·代际·人群-完整合集.md"
+    path: &people_path "05-孩子·代际·人群-完整合集.md"
     authority: "MIXED"
     content_role: "world_bundle"
-    routing_hint: "Children, school life, generations, aging, disability, population groups, migration, and age-specific lived experience. First-choice source for child/family/generation scenes."
+    routing_hint: "Broad mixed people bundle. Fallback only after focused childhood, school, age or group sections cannot cover a concrete missing need."
+    instruction_capability: false
+    access: *canon_access
+
+  WORLD.CULTURE.DAILY:
+    path: *culture_path
+    section_heading: "04-文化与日常-02-日常生活层"
+    subsection_headings:
+      - "第一部分：住房·通勤·邻里·家务——日常的主干"
+    authority: "MIXED"
+    content_role: "canon_section"
+    routing_hint: "Focused ordinary housing, commuting, neighborhoods, chores and leisure from the first part of the daily-life chapter. First choice for an everyday scene; excludes the chapter's Zero-Yuan memory and spectacle sections."
+    instruction_capability: false
+    access: *canon_access
+
+  WORLD.CULTURE.FOOD:
+    path: *culture_path
+    section_heading: "04-文化与日常-06-饮食文化"
+    subsection_headings:
+      - "第一章　主食与食材——日常饮食的主干"
+      - "第二章　烹饪与家庭餐桌"
+      - "第三章　外出就餐与食物市场"
+    authority: "MIXED"
+    content_role: "canon_section"
+    routing_hint: "Ordinary food, home cooking and eating out when a meal matters; excludes guardian menus and commemorative foods."
+    instruction_capability: false
+    access: *canon_access
+
+  WORLD.CULTURE.FAMILY:
+    path: *culture_path
+    section_heading: "04-文化与日常-18-婚姻·离婚·家庭结构"
+    authority: "MIXED"
+    content_role: "canon_section"
+    routing_hint: "Marriage, divorce, custody, and varied family structures when relationships or household structure affect the characters."
+    instruction_capability: false
+    access: *canon_access
+
+  WORLD.CULTURE.NEIGHBORS:
+    path: *culture_path
+    section_heading: "04-文化与日常-27-隐私·噪音·邻里规范"
+    authority: "MIXED"
+    content_role: "canon_section"
+    routing_hint: "Privacy, noise and neighbor expectations in homes and local communities."
+    instruction_capability: false
+    access: *canon_access
+
+  WORLD.CULTURE.CONSUMPTION:
+    path: *culture_path
+    section_heading: "04-文化与日常-29-消费·品牌·广告"
+    subsection_headings:
+      - "第一章　消费的物质基础"
+    authority: "MIXED"
+    content_role: "canon_section"
+    routing_hint: "Ordinary buying, household budgets and consumer needs. Choose separate brand or advertising sections only when those matter; excludes Zero-Yuan merchandise."
+    instruction_capability: false
+    access: *canon_access
+
+  WORLD.CULTURE.BRANDS:
+    path: *culture_path
+    section_heading: "04-文化与日常-29-消费·品牌·广告"
+    subsection_headings:
+      - "第三章　品牌与声誉"
+    authority: "MIXED"
+    content_role: "canon_section"
+    routing_hint: "Brand reputation, repairs and consumer trust when a brand affects a purchase."
+    instruction_capability: false
+    access: *canon_access
+
+  WORLD.CULTURE.ADVERTISING:
+    path: *culture_path
+    section_heading: "04-文化与日常-29-消费·品牌·广告"
+    subsection_headings:
+      - "第四章　广告与平台"
+    authority: "MIXED"
+    content_role: "canon_section"
+    routing_hint: "Advertisements, recommendations and consumer platforms when characters encounter marketing."
+    instruction_capability: false
+    access: *canon_access
+
+  WORLD.CULTURE.HOME:
+    path: *culture_path
+    section_heading: "04-文化与日常-30-家庭内景与数字日常"
+    subsection_headings:
+      - "一、家庭并不只有一种形态"
+      - "二、住房与居住"
+      - "三、家务与家庭劳动"
+      - "四、照护与代际"
+      - "五、亲密与情感劳动"
+      - "七、普通数字生活"
+    authority: "MIXED"
+    content_role: "canon_section"
+    routing_hint: "Household interiors, family interaction and everyday digital habits at home."
+    instruction_capability: false
+    access: *canon_access
+
+  WORLD.CULTURE.YOUTH:
+    path: *culture_path
+    section_heading: "04-文化与日常-32-现代青年文化-电竞·网红·大学·潮流"
+    authority: "MIXED"
+    content_role: "canon_section"
+    routing_hint: "University students, games, online creators and contemporary youth trends when young adults participate in those activities."
+    instruction_capability: false
+    access: *canon_access
+
+  WORLD.PEOPLE.CHILDHOOD:
+    path: *people_path
+    section_heading: "05-孩子·代际·人群-01-儿童与童年"
+    subsection_headings:
+      - "一、儿童首先是不同的人"
+      - "三、家庭与照护"
+    authority: "MIXED"
+    content_role: "canon_section"
+    routing_hint: "Children as distinct people and ordinary family care. First choice for a child in a family scene; excludes the chapter's Zero-Yuan, political and off-world sections. Add education source for school details."
+    instruction_capability: false
+    access: *canon_access
+
+  WORLD.PEOPLE.SCHOOL_TEEN:
+    path: *people_path
+    section_heading: "05-孩子·代际·人群-07-中学阶段与生活节奏"
+    subsection_headings:
+      - "一、为什么中学阶段容易感到时间压力"
+      - "二、常见时间结构"
+      - "五、学生参与与边界"
+      - "六、失败与不平等"
+    authority: "MIXED"
+    content_role: "canon_section"
+    routing_hint: "Teenagers' secondary school pressure, schedules and social life; excludes the Zero-Yuan curriculum subsection."
+    instruction_capability: false
+    access: *canon_access
+
+  WORLD.INSTITUTIONS.EDUCATION:
+    path: *institutions_path
+    section_heading: "03-制度与法律-02-教育与教科书"
+    subsection_headings:
+      - "第二章　课程、评估与教师"
+    authority: "MIXED"
+    content_role: "canon_section"
+    routing_hint: "Focused curriculum, assessment and teachers when school itself shapes the action; excludes textbook chapters about Zero-Yuan and aliens."
+    instruction_capability: false
+    access: *canon_access
+
+  WORLD.INSTITUTIONS.ECONOMY_DAILY:
+    path: *institutions_path
+    section_heading: "03-制度与法律-05b-经济日常质感"
+    authority: "MIXED"
+    content_role: "canon_section"
+    routing_hint: "Concrete daily costs, payment and economic texture when money matters to an ordinary scene."
+    instruction_capability: false
+    access: *canon_access
+
+  WORLD.INSTITUTIONS.WORK:
+    path: *institutions_path
+    section_heading: "03-制度与法律-16-劳动·职业·物流"
+    subsection_headings:
+      - "一、劳动分布与行业结构"
+      - "二、劳动力市场与薪酬"
+      - "三、职业培训与资格互认"
+      - "四、工会与集体谈判"
+      - "五、四层物流"
+      - "六、劳动迁移"
+    authority: "MIXED"
+    content_role: "canon_section"
+    routing_hint: "Jobs, wages, training, workplaces and ordinary logistics when work materially affects a character; excludes the chapter's Zero-Yuan event section."
     instruction_capability: false
     access: *canon_access

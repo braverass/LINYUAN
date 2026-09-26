@@ -1,0 +1,44 @@
+version: "0.6"
+id: "daily_life.school-pickup"
+category: "daily_life"
+description: "A school pickup and family dinner should follow people living their day, without a world guide or gratuitous Canon exposition."
+request: "写一个普通家庭的短场景：孩子放学后和妈妈步行回家，途中买菜，晚饭时聊聊今天学校里发生的小事。请让人物像生活在这里的人一样行动和说话。"
+scene_state:
+  location: "学校到家附近的街区"
+  time: "傍晚"
+  characters: ["孩子", "妈妈"]
+required_sources:
+  - "WORLD.CULTURE.DAILY"
+  - "WORLD.PEOPLE.CHILDHOOD"
+allowed_sources:
+  - "WORLD.CULTURE.CONSUMPTION"
+  - "WORLD.CULTURE.FOOD"
+  - "WORLD.CULTURE.HOME"
+  - "WORLD.INSTITUTIONS.EDUCATION"
+requirements:
+  - id: "REQ_LIVED_ACTION"
+    kind: "fact"
+    description: "The prose centers the pickup, walk, shopping and dinner through concrete actions, speech or ordinary interaction."
+  - id: "REQ_CHILD_AGENCY"
+    kind: "constraint"
+    description: "The child expresses an ordinary school experience or desire, rather than serving as an audience for a setting lecture."
+forbidden_inferences:
+  - id: "FI_WORLD_EXPOSITION"
+    description: "Unrequested FTL, alien civilizations, Zero-Yuan powers, world history or political structure are introduced as explanatory narration."
+forbidden_overconstraints:
+  - id: "OC_BACKGROUND_CHECKLIST"
+    description: "ACTIVE_CONTEXT requires true but scene-irrelevant lore to be presented in the prose."
+  - id: "OC_FIXED_CHILD_RESPONSE"
+    description: "ACTIVE_CONTEXT dictates exactly what the child says or does without scene evidence."
+expected_need_context: []
+behavioral_diversity:
+  sample_count: 2
+  minimum_unique_signatures: 2
+validator:
+  gold_violations: []
+  gold_non_violations:
+    - "N_NO_FTL_MENTION"
+    - "N_NO_ZERO_YUAN_MENTION"
+    - "N_NO_POLITICS_MENTION"
+metamorphic_group: null
+synthetic_canon: null

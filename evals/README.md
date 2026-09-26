@@ -29,6 +29,7 @@ Each case declares:
 
 - request and scene state;
 - semantic sources that retrieval should find;
+- optional focused sources that may also be retrieved (`allowed_sources`); any other source lowers retrieval precision;
 - semantic requirements the compiled IR must preserve;
 - forbidden inferences;
 - forbidden overconstraints;
@@ -44,6 +45,7 @@ The `synthetic_canon` field is test material only. It is deliberately not part o
 Spec 0.6 reports:
 
 - `retrieval_recall`
+- `retrieval_precision`
 - `constraint_fidelity`
 - `forbidden_inference_rate`
 - `ir_overconstraint_rate`

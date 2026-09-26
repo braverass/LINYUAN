@@ -36,7 +36,9 @@ export type RetrieverAdapter = (
 
 export type RetrievalPlannerAdapter = (
   missing: MissingContext[],
-  request: string
+  request: string,
+  sceneState: Record<string, unknown>,
+  retrievedIds: string[]
 ) => Promise<string[]>;
 
 export type InitialRetrievalPlannerAdapter = (
@@ -155,16 +157,19 @@ export async function runFiction(
     if (compiled.status === 'NEED_CONTEXT') {
       const ids = await adapters.planAdditionalRetrieval(
         compiled.missing,
-        input.request
+        input.request,
+        structuredClone(input.sceneState),
+        canonFragments.map((fragment) => fragment.semanticId)
       );
-      if (ids.length === 0) {
+      const unseen = ids.filter((id) => !canonFragments.some((fragment) => fragment.semanticId === id));
+      if (unseen.length === 0) {
         return {
           status: 'NEED_CONTEXT',
           missing: compiled.missing,
           trace,
         };
       }
-      const added = await adapters.retrieve(ids);
+      const added = await adapters.retrieve(unseen);
       canonFragments = mergeFragments(canonFragments, added);
       recordRetrieval(trace, added);
       continue;
@@ -197,9 +202,12 @@ export async function runFiction(
       );
       const ids = await adapters.planAdditionalRetrieval(
         generation.missing,
-        input.request
+        input.request,
+        structuredClone(input.sceneState),
+        canonFragments.map((fragment) => fragment.semanticId)
       );
-      if (ids.length === 0 || round === maxRounds - 1) {
+      const unseen = ids.filter((id) => !canonFragments.some((fragment) => fragment.semanticId === id));
+      if (unseen.length === 0 || round === maxRounds - 1) {
         return {
           status: 'NEED_CONTEXT',
           missing: generation.missing,
@@ -207,7 +215,7 @@ export async function runFiction(
         };
       }
 
-      const added = await adapters.retrieve(ids);
+      const added = await adapters.retrieve(unseen);
       canonFragments = mergeFragments(canonFragments, added);
       recordRetrieval(trace, added);
       continue;
@@ -215,6 +223,8 @@ export async function runFiction(
 
     const violations = await validateWithAdapter(adapters.validate, {
       draft: generation.draft,
+      request: input.request,
+      sceneState: structuredClone(input.sceneState),
       activeContext: compiled.activeContext.value,
       evidence: {
         rawCanon: canonFragments.map((fragment) => ({ ...fragment })),

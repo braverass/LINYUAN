@@ -45,6 +45,9 @@ function validateCase(value: unknown, source: string): EvalCase {
   }
 
   assertStringArray(item.required_sources, 'required_sources');
+  if (item.allowed_sources !== undefined) {
+    assertStringArray(item.allowed_sources, 'allowed_sources');
+  }
   assertStringArray(item.expected_need_context, 'expected_need_context');
 
   return item as unknown as EvalCase;

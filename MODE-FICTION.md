@@ -46,6 +46,7 @@ Generator must treat the requested scene as a lived event, not as an opportunity
 - Realize the immediate people, place, objects, routines, friction, and dialogue first.
 - A true macro-world fact belongs in prose only when it causally affects what characters notice, know, decide, say, or physically experience in this scene.
 - Do not turn background Canon into exposition merely because it appears in ACTIVE_CONTEXT.
+- A fact in ACTIVE_CONTEXT is a truth boundary, not a checklist of details the prose must mention.
 - For ordinary daily-life scenes, default to ordinary lived details rather than civilization-scale explanation.
 - Children and other characters are participants in their world, not audience surrogates for a setting guide unless the request explicitly asks for exposition.
 

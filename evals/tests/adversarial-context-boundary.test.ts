@@ -37,7 +37,7 @@ test('adversarial eval isolation: candidate never sees gold and retrieval eviden
                 emotional_expression: true,
               },
             },
-            provenance: { F1: { source_id: 'EVAL.SYNTHETIC' } },
+            provenance: { F1: { source_id: 'EVAL.SYNTHETIC', scene_relevance: 'material', scene_impact: 'Synthetic fact applies to the fixture scene.' } },
           }),
         };
       }

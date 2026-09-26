@@ -6,6 +6,7 @@ import {
   assertRoleAccess,
   loadRegistry,
   SourceRegistry,
+  selectRegisteredContent,
 } from './registry';
 import { stableHash } from './trace';
 
@@ -28,7 +29,8 @@ export async function retrieveBySemanticIds(
   for (const semanticId of [...new Set(semanticIds)]) {
     const source = assertRoleAccess(registry, semanticId, 'retriever');
     const physicalPath = path.resolve(repoRoot, source.path);
-    const content = await readFile(physicalPath, 'utf8');
+    const raw = await readFile(physicalPath, 'utf8');
+    const content = selectRegisteredContent(raw, source);
 
     fragments.push({
       semanticId,

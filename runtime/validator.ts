@@ -7,6 +7,8 @@ import type { RawCanonFragment } from './compiler';
 
 export interface ValidatorInput {
   draft: string;
+  request: string;
+  sceneState: Record<string, unknown>;
   activeContext: ActiveContext;
   evidence: {
     rawCanon: RawCanonFragment[];

@@ -56,7 +56,7 @@ test('production fiction entry runs retrieval through local patching', async () 
           },
         },
         provenance: {
-          F1: { source_id: 'AUTHOR.PERSONALITY' },
+          F1: { source_id: 'AUTHOR.PERSONALITY', scene_relevance: 'material', scene_impact: 'The fact constrains this test scene.' },
         },
       });
     }
@@ -77,7 +77,7 @@ test('production fiction entry runs retrieval through local patching', async () 
               sentence_start: 2,
               sentence_end: 2,
             },
-            actual: { semantic_claim: 'fixture mismatch' },
+            actual: { semantic_claim: 'fixture mismatch', draft_quote: '第二句。' },
             required_state: { corrected: true },
             patch_contract: {
               allowed_scope: {
