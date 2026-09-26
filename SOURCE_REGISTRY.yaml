@@ -7,6 +7,7 @@ sources:
     path: "00A-AUTHOR-ROUTER.md"
     authority: "L0"
     content_role: "author_router"
+    routing_hint: "Authority/routing meta-rules and Canon conflict priority. Use to resolve which source governs; do not use as ordinary scene content."
     instruction_capability: false
     access: &canon_access
       retriever: read
@@ -20,6 +21,7 @@ sources:
     path: "00B-AUTHOR-CANON-零渊真实人格.md"
     authority: "L0"
     content_role: "author_canon"
+    routing_hint: "Zero-Yuan's actual personality, motives, preferences, and decision boundaries. Retrieve when Zero-Yuan is an acting/deciding subject, not for unrelated ordinary-life scenes."
     instruction_capability: false
     access: *canon_access
 
@@ -27,6 +29,7 @@ sources:
     path: "00C-AUTHOR-CANON-零渊行为样本库.md"
     authority: "L0"
     content_role: "author_behavior_evidence"
+    routing_hint: "Observed Zero-Yuan behavior examples for behavior inference. Retrieve only when his likely conduct or interaction style is materially at issue."
     instruction_capability: false
     access: *canon_access
 
@@ -34,6 +37,7 @@ sources:
     path: "00D-AUTHOR-CANON-Alpha普通人社会心理基线.md"
     authority: "L0"
     content_role: "author_canon"
+    routing_hint: "Modern Alpha ordinary-human psychology, values, social expectations, family/relationship baselines. Useful for everyday characters when local scene facts are not enough."
     instruction_capability: false
     access: *canon_access
 
@@ -41,6 +45,7 @@ sources:
     path: "00E-世界历史因果约束.md"
     authority: "ROUTED"
     content_role: "derived_constraint"
+    routing_hint: "Historical causality and reconstruction constraints. Retrieve when a scene/question hinges on past processes, chronology, or historical explanation."
     instruction_capability: false
     access: *canon_access
 
@@ -48,6 +53,7 @@ sources:
     path: "00F-科技与军事因果矩阵.md"
     authority: "ROUTED"
     content_role: "derived_constraint"
+    routing_hint: "Technology and military causality constraints. Retrieve for engineering, weapons, warfare, logistics, or technology-development consequences."
     instruction_capability: false
     access: *canon_access
 
@@ -55,6 +61,7 @@ sources:
     path: "00G-现代政治功能地图.md"
     authority: "ROUTED"
     content_role: "derived_constraint"
+    routing_hint: "Modern governance functions, jurisdiction, public services, cross-domain coordination. Retrieve only when institutions, law, public authority, or service systems materially shape the scene."
     instruction_capability: false
     access: *canon_access
 
@@ -62,6 +69,7 @@ sources:
     path: "00H-AUTHOR-Alpha历史因果与重建约束.md"
     authority: "L0"
     content_role: "author_canon"
+    routing_hint: "Author-level Alpha historical causality and reconstruction constraints. Retrieve for history-focused work, not routine present-day scenes."
     instruction_capability: false
     access: *canon_access
 
@@ -69,6 +77,7 @@ sources:
     path: "00I-AUTHOR-零渊三十万年私人活动与历史扰动约束.md"
     authority: "L0"
     content_role: "author_canon"
+    routing_hint: "Zero-Yuan's long-term private activity and historical disturbance boundaries. Retrieve when his long-horizon private history materially matters."
     instruction_capability: false
     access: *canon_access
 
@@ -76,6 +85,7 @@ sources:
     path: "00J-AUTHOR-CANON-零渊能力本体与操作边界.md"
     authority: "L0"
     content_role: "author_canon"
+    routing_hint: "Objective mechanics, limits, and failure conditions of Zero-Yuan's abilities. Retrieve when an ability is used, tested, compared, or constrains the scene."
     instruction_capability: false
     access: *canon_access
 
@@ -83,6 +93,7 @@ sources:
     path: "00K-AUTHOR-CANON-语言翻译与词源因果边界.md"
     authority: "L0"
     content_role: "author_canon"
+    routing_hint: "Translation layer, naming, etymology, terminology, register, and language-causality boundaries. Retrieve when wording, names, language history, or translation choices matter."
     instruction_capability: false
     access: *canon_access
 
@@ -90,6 +101,7 @@ sources:
     path: "00L-AUTHOR-CANON-科技底层原理解释层.md"
     authority: "L0"
     content_role: "author_canon"
+    routing_hint: "Author constraints for explaining underlying science/technology. Retrieve for technical explanation tasks, not ordinary scene texture."
     instruction_capability: false
     access: *canon_access
 
@@ -97,6 +109,7 @@ sources:
     path: "00-零渊世界设定-完整合集.md"
     authority: "MIXED"
     content_role: "canon_bundle"
+    routing_hint: "Very large mixed Canon bundle. Fallback only when no narrower registered source can supply the required facts; avoid for initial retrieval when a focused source exists."
     instruction_capability: false
     access: *canon_access
 
@@ -104,6 +117,7 @@ sources:
     path: "01-世界骨架-完整合集.md"
     authority: "MIXED"
     content_role: "world_bundle"
+    routing_hint: "Macro world structure: history, regions, modern technology, population, transport, AI, space and interstellar baseline. Retrieve only when those macro facts causally affect the requested scene."
     instruction_capability: false
     access: *canon_access
 
@@ -111,6 +125,7 @@ sources:
     path: "02-守护者-完整合集.md"
     authority: "MIXED"
     content_role: "world_bundle"
+    routing_hint: "World-level records about Zero-Yuan/guardian-related history, institutions, observations, and social relations. Retrieve when those topics are directly present."
     instruction_capability: false
     access: *canon_access
 
@@ -118,6 +133,7 @@ sources:
     path: "03-制度与法律-完整合集.md"
     authority: "MIXED"
     content_role: "world_bundle"
+    routing_hint: "Law, education, healthcare, welfare, family policy, justice, public services, and institutional procedure. Retrieve when an institution directly affects what characters can do or experience."
     instruction_capability: false
     access: *canon_access
 
@@ -125,6 +141,7 @@ sources:
     path: "04-文化与日常-完整合集.md"
     authority: "MIXED"
     content_role: "world_bundle"
+    routing_hint: "Everyday lived life: housing, commuting, neighborhoods, chores, leisure, food, media, relationships, youth culture, privacy, consumer life, local habits. First-choice source for ordinary slice-of-life scenes."
     instruction_capability: false
     access: *canon_access
 
@@ -132,5 +149,6 @@ sources:
     path: "05-孩子·代际·人群-完整合集.md"
     authority: "MIXED"
     content_role: "world_bundle"
+    routing_hint: "Children, school life, generations, aging, disability, population groups, migration, and age-specific lived experience. First-choice source for child/family/generation scenes."
     instruction_capability: false
     access: *canon_access
