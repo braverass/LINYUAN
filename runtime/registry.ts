@@ -66,6 +66,10 @@ export async function lintRegistry(
       continue;
     }
 
+    if (source.access?.retriever === 'read' && !source.routing_hint?.trim()) {
+      errors.push(`${semanticId}: retrievable source must define routing_hint`);
+    }
+
     if (source.instruction_capability !== false) {
       errors.push(
         `${semanticId}: Canon/data sources must set instruction_capability=false`
