@@ -36,7 +36,7 @@ test('retrieval planner receives scene-relevance routing hints and compiler filt
         /materially change the requested scene/
       );
       assert.match(
-        request.system,
+        request.system ?? '',
         /WORLD\.ALL is a fallback/
       );
 
