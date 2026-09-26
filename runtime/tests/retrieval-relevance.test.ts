@@ -32,7 +32,7 @@ test('retrieval planner receives scene-relevance routing hints and compiler filt
   const client = fixtureClient((request) => {
     if (request.stage === 'retrieval_planner') {
       assert.match(
-        request.system,
+        request.system ?? '',
         /materially change the requested scene/
       );
       assert.match(
@@ -72,7 +72,7 @@ test('retrieval planner receives scene-relevance routing hints and compiler filt
     }
 
     if (request.stage === 'compiler') {
-      compilerSystem = request.system;
+      compilerSystem = request.system ?? '';
       return JSON.stringify({
         status: 'READY',
         activeContext: {
