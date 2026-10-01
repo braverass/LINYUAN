@@ -39,7 +39,9 @@ function sections(text: string): { sections: Section[]; lines: number } {
     }
   });
   const out: Section[] = heads.map((h, idx) => {
-    const end = idx + 1 < heads.length ? heads[idx + 1]!.start - 1 : lines.length;
+    let end = idx + 1 < heads.length ? heads[idx + 1]!.start - 1 : lines.length;
+    // Trim bundle separators ("---", "## NN-name") and blank lines that belong to the next file.
+    while (end > h.start && /^(\s*|---\s*|## \d\d-.*)$/.test(lines[end - 1]!.replace(/\r$/, ''))) end--;
     const bytes = Buffer.byteLength(lines.slice(h.start - 1, end).join('\n'), 'utf8');
     return { ...h, end, bytes };
   });
