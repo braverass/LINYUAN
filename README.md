@@ -13,6 +13,7 @@
 | semantic ID ↔ 文件路径 | [`SOURCE_REGISTRY.yaml`](SOURCE_REGISTRY.yaml) |
 | 检索/编译协议 | [`00A-按需读取与写作执行协议.md`](00A-按需读取与写作执行协议.md) |
 | 作者层规则与 Canon | `00A-AUTHOR-ROUTER.md`、`00B`–`00L` |
+| 大文件章节目录（自动生成） | [`SECTION-INDEX.md`](SECTION-INDEX.md)（`npm run index:sections` 重新生成） |
 | 世界设定分卷 | `01`–`05` 各 `*-完整合集.md`；`00-零渊世界设定-完整合集.md` 为兜底大包 |
 | 运行时（Retriever / Compiler / Generator / Validator / Patcher） | [`runtime/`](runtime/README.md) |
 | 评测 | [`evals/`](evals/README.md) |
@@ -56,6 +57,8 @@ export ANTHROPIC_API_KEY=<你的 key>       # 或 OPENAI_API_KEY / GEMINI_API_KE
 npm run typecheck
 npm test
 npm run lint:registry
+npm run index:sections        # 修改 Canon 后重新生成 SECTION-INDEX.md
+npm run index:sections:check  # 检查目录是否过期
 npm run ci      # 全部检查
 ```
 
@@ -63,4 +66,4 @@ npm run ci      # 全部检查
 
 - 仓库是公开的，默认分支为 `main`，不需要任何权限。
 - 抓取工具返回 404/403 多半是工具侧被 GitHub 限流或拦截。换用 `raw.githubusercontent.com` 直链（见 `llms.txt`），或直接 `git clone https://github.com/braverass/LINYUAN.git`。
-- `00-零渊世界设定-完整合集.md` 约 1.1 MB，多数网页抓取工具会截断或拒绝。请改读更窄的分卷，或把文件作为附件上传后让模型**先搜索定位、再读相关章节**。
+- `00-零渊世界设定-完整合集.md` 约 1.1 MB，多数网页抓取工具会截断或拒绝。请改读更窄的分卷，或把文件作为附件上传后让模型**先搜索定位、再读相关章节**。[`SECTION-INDEX.md`](SECTION-INDEX.md) 列出了每个大文件的章节标题与行号范围，可以直接按范围读取。

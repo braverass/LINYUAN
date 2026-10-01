@@ -5,6 +5,7 @@
 ## 先读
 - [README](https://raw.githubusercontent.com/braverass/LINYUAN/main/README.md): 仓库总览与上手方式
 - [CHAT-FICTION-GUIDE](https://raw.githubusercontent.com/braverass/LINYUAN/main/CHAT-FICTION-GUIDE.md): 在网页聊天（Claude / ChatGPT / Gemini 等）里写小说的两步流程与提示词模板
+- [SECTION-INDEX](https://raw.githubusercontent.com/braverass/LINYUAN/main/SECTION-INDEX.md): 大文件的章节目录（标题、行号范围、大小）；大文件读不全时先看它，再只读相关章节
 - [AI_ENTRY](https://raw.githubusercontent.com/braverass/LINYUAN/main/AI_ENTRY.md): 运行时入口与模式路由（FICTION / EXPLAIN）
 - [SOURCE_REGISTRY](https://raw.githubusercontent.com/braverass/LINYUAN/main/SOURCE_REGISTRY.yaml): semantic ID → 文件路径（唯一的路径来源）
 - [按需读取与写作执行协议](https://raw.githubusercontent.com/braverass/LINYUAN/main/00A-%E6%8C%89%E9%9C%80%E8%AF%BB%E5%8F%96%E4%B8%8E%E5%86%99%E4%BD%9C%E6%89%A7%E8%A1%8C%E5%8D%8F%E8%AE%AE.md): 检索/编译规则与任务→来源对照表
