@@ -1,0 +1,38 @@
+# LINYUAN（零渊）
+
+> 《零渊》世界设定 Canon + 小说创作运行时（Spec 0.5+）。这是一个**中文**设定库，主要用途是让 AI 写小说正文。设定文件很大，**不要整包读入**，按任务只读最小充分集合。
+
+## 先读
+- [README](https://raw.githubusercontent.com/braverass/LINYUAN/main/README.md): 仓库总览与上手方式
+- [CHAT-FICTION-GUIDE](https://raw.githubusercontent.com/braverass/LINYUAN/main/CHAT-FICTION-GUIDE.md): 在网页聊天（Claude / ChatGPT / Gemini 等）里写小说的两步流程与提示词模板
+- [SECTION-INDEX](https://raw.githubusercontent.com/braverass/LINYUAN/main/SECTION-INDEX.md): 大文件的章节目录（标题、行号范围、大小）；大文件读不全时先看它，再只读相关章节
+- [AI_ENTRY](https://raw.githubusercontent.com/braverass/LINYUAN/main/AI_ENTRY.md): 运行时入口与模式路由（FICTION / EXPLAIN）
+- [SOURCE_REGISTRY](https://raw.githubusercontent.com/braverass/LINYUAN/main/SOURCE_REGISTRY.yaml): semantic ID → 文件路径（唯一的路径来源）
+- [按需读取与写作执行协议](https://raw.githubusercontent.com/braverass/LINYUAN/main/00A-%E6%8C%89%E9%9C%80%E8%AF%BB%E5%8F%96%E4%B8%8E%E5%86%99%E4%BD%9C%E6%89%A7%E8%A1%8C%E5%8D%8F%E8%AE%AE.md): 检索/编译规则与任务→来源对照表
+- [MODE-FICTION](https://raw.githubusercontent.com/braverass/LINYUAN/main/MODE-FICTION.md) / [MODE-EXPLAIN](https://raw.githubusercontent.com/braverass/LINYUAN/main/MODE-EXPLAIN.md): 两种模式的契约
+
+## Canon 来源（按需读取；体积见括号）
+- [00A-AUTHOR-ROUTER.md](https://raw.githubusercontent.com/braverass/LINYUAN/main/00A-AUTHOR-ROUTER.md) (41 KB) — `AUTHOR.ROUTER`：作者层读取路由、权限与冲突优先级
+- [00B-AUTHOR-CANON-零渊真实人格.md](https://raw.githubusercontent.com/braverass/LINYUAN/main/00B-AUTHOR-CANON-%E9%9B%B6%E6%B8%8A%E7%9C%9F%E5%AE%9E%E4%BA%BA%E6%A0%BC.md) (53 KB) — `AUTHOR.PERSONALITY`：零渊的真实人格、动机、偏好、决策边界
+- [00C-AUTHOR-CANON-零渊行为样本库.md](https://raw.githubusercontent.com/braverass/LINYUAN/main/00C-AUTHOR-CANON-%E9%9B%B6%E6%B8%8A%E8%A1%8C%E4%B8%BA%E6%A0%B7%E6%9C%AC%E5%BA%93.md) (203 KB) — `AUTHOR.BEHAVIOR_DATASET`：零渊行为样本，用于行为推断
+- [00D-AUTHOR-CANON-Alpha普通人社会心理基线.md](https://raw.githubusercontent.com/braverass/LINYUAN/main/00D-AUTHOR-CANON-Alpha%E6%99%AE%E9%80%9A%E4%BA%BA%E7%A4%BE%E4%BC%9A%E5%BF%83%E7%90%86%E5%9F%BA%E7%BA%BF.md) (15 KB) — `AUTHOR.ALPHA_BASELINE`：Alpha 普通人的心理、价值、家庭与关系基线
+- [00E-世界历史因果约束.md](https://raw.githubusercontent.com/braverass/LINYUAN/main/00E-%E4%B8%96%E7%95%8C%E5%8E%86%E5%8F%B2%E5%9B%A0%E6%9E%9C%E7%BA%A6%E6%9D%9F.md) (5 KB) — `WORLD.HISTORY_CAUSALITY`：历史因果与重建约束
+- [00F-科技与军事因果矩阵.md](https://raw.githubusercontent.com/braverass/LINYUAN/main/00F-%E7%A7%91%E6%8A%80%E4%B8%8E%E5%86%9B%E4%BA%8B%E5%9B%A0%E6%9E%9C%E7%9F%A9%E9%98%B5.md) (7 KB) — `WORLD.TECH_MILITARY_CAUSALITY`：科技与军事因果约束
+- [00G-现代政治功能地图.md](https://raw.githubusercontent.com/braverass/LINYUAN/main/00G-%E7%8E%B0%E4%BB%A3%E6%94%BF%E6%B2%BB%E5%8A%9F%E8%83%BD%E5%9C%B0%E5%9B%BE.md) (6 KB) — `WORLD.POLITICAL_FUNCTION`：现代治理功能、管辖、公共服务
+- [00H-AUTHOR-Alpha历史因果与重建约束.md](https://raw.githubusercontent.com/braverass/LINYUAN/main/00H-AUTHOR-Alpha%E5%8E%86%E5%8F%B2%E5%9B%A0%E6%9E%9C%E4%B8%8E%E9%87%8D%E5%BB%BA%E7%BA%A6%E6%9D%9F.md) (6 KB) — `AUTHOR.ALPHA_HISTORY`：作者层 Alpha 历史因果
+- [00I-AUTHOR-零渊三十万年私人活动与历史扰动约束.md](https://raw.githubusercontent.com/braverass/LINYUAN/main/00I-AUTHOR-%E9%9B%B6%E6%B8%8A%E4%B8%89%E5%8D%81%E4%B8%87%E5%B9%B4%E7%A7%81%E4%BA%BA%E6%B4%BB%E5%8A%A8%E4%B8%8E%E5%8E%86%E5%8F%B2%E6%89%B0%E5%8A%A8%E7%BA%A6%E6%9D%9F.md) (9 KB) — `AUTHOR.PRIVATE_ACTIVITY`：零渊长期私人活动与历史扰动边界
+- [00J-AUTHOR-CANON-零渊能力本体与操作边界.md](https://raw.githubusercontent.com/braverass/LINYUAN/main/00J-AUTHOR-CANON-%E9%9B%B6%E6%B8%8A%E8%83%BD%E5%8A%9B%E6%9C%AC%E4%BD%93%E4%B8%8E%E6%93%8D%E4%BD%9C%E8%BE%B9%E7%95%8C.md) (23 KB) — `AUTHOR.ABILITY`：能力的客观机制、限制、失败条件
+- [00K-AUTHOR-CANON-语言翻译与词源因果边界.md](https://raw.githubusercontent.com/braverass/LINYUAN/main/00K-AUTHOR-CANON-%E8%AF%AD%E8%A8%80%E7%BF%BB%E8%AF%91%E4%B8%8E%E8%AF%8D%E6%BA%90%E5%9B%A0%E6%9E%9C%E8%BE%B9%E7%95%8C.md) (17 KB) — `AUTHOR.LANGUAGE`：翻译层、称谓、词源、语感
+- [00L-AUTHOR-CANON-科技底层原理解释层.md](https://raw.githubusercontent.com/braverass/LINYUAN/main/00L-AUTHOR-CANON-%E7%A7%91%E6%8A%80%E5%BA%95%E5%B1%82%E5%8E%9F%E7%90%86%E8%A7%A3%E9%87%8A%E5%B1%82.md) (2 KB) — `AUTHOR.TECH_EXPLANATION`：科技底层原理的解释约束
+- [00-零渊世界设定-完整合集.md](https://raw.githubusercontent.com/braverass/LINYUAN/main/00-%E9%9B%B6%E6%B8%8A%E4%B8%96%E7%95%8C%E8%AE%BE%E5%AE%9A-%E5%AE%8C%E6%95%B4%E5%90%88%E9%9B%86.md) (1.1 MB) — `WORLD.ALL`：混合型超大合集（兜底）
+- [01-世界骨架-完整合集.md](https://raw.githubusercontent.com/braverass/LINYUAN/main/01-%E4%B8%96%E7%95%8C%E9%AA%A8%E6%9E%B6-%E5%AE%8C%E6%95%B4%E5%90%88%E9%9B%86.md) (244 KB) — `WORLD.SKELETON`：宏观世界结构：历史、区域、科技、人口、交通、AI、太空
+- [02-守护者-完整合集.md](https://raw.githubusercontent.com/braverass/LINYUAN/main/02-%E5%AE%88%E6%8A%A4%E8%80%85-%E5%AE%8C%E6%95%B4%E5%90%88%E9%9B%86.md) (309 KB) — `WORLD.GUARDIANS`：与零渊/守护者相关的世界档案、机构、观察
+- [03-制度与法律-完整合集.md](https://raw.githubusercontent.com/braverass/LINYUAN/main/03-%E5%88%B6%E5%BA%A6%E4%B8%8E%E6%B3%95%E5%BE%8B-%E5%AE%8C%E6%95%B4%E5%90%88%E9%9B%86.md) (204 KB) — `WORLD.INSTITUTIONS`：法律、教育、医疗、福利、司法、公共服务
+- [04-文化与日常-完整合集.md](https://raw.githubusercontent.com/braverass/LINYUAN/main/04-%E6%96%87%E5%8C%96%E4%B8%8E%E6%97%A5%E5%B8%B8-%E5%AE%8C%E6%95%B4%E5%90%88%E9%9B%86.md) (313 KB) — `WORLD.CULTURE`：居住、通勤、街区、家务、饮食、媒体、关系、消费
+- [05-孩子·代际·人群-完整合集.md](https://raw.githubusercontent.com/braverass/LINYUAN/main/05-%E5%AD%A9%E5%AD%90%C2%B7%E4%BB%A3%E9%99%85%C2%B7%E4%BA%BA%E7%BE%A4-%E5%AE%8C%E6%95%B4%E5%90%88%E9%9B%86.md) (78 KB) — `WORLD.PEOPLE`：儿童、学校、代际、老龄、残障、人群
+
+## 规则摘要
+- 日常/生活切片 → 优先 `WORLD.CULTURE`；儿童/家庭/代际 → 优先 `WORLD.PEOPLE`。
+- 禁止为“保险”同时加载 `WORLD.ALL` 和全部分卷。
+- 资料没写的地方不要“合理推测”；让人物不知道，或向作者确认。
+- 写作者（Generator）不应直接接触 Raw Canon，只接收编译后的事实/约束摘要。
